@@ -1,6 +1,6 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, X } from '@phosphor-icons/react'
+import { Plus, X, Minus } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { HistoryPicker } from './HistoryPicker'
 import { SettingsPopover } from './SettingsPopover'
@@ -39,9 +39,11 @@ function StatusDot({ status, hasUnread, hasPermission }: { status: TabStatus; ha
 export function TabStrip() {
   const tabs = useSessionStore((s) => s.tabs)
   const activeTabId = useSessionStore((s) => s.activeTabId)
+  const isExpanded = useSessionStore((s) => s.isExpanded)
   const selectTab = useSessionStore((s) => s.selectTab)
   const createTab = useSessionStore((s) => s.createTab)
   const closeTab = useSessionStore((s) => s.closeTab)
+  const toggleExpanded = useSessionStore((s) => s.toggleExpanded)
   const colors = useColors()
 
   return (
@@ -125,6 +127,17 @@ export function TabStrip() {
         <HistoryPicker />
 
         <SettingsPopover />
+
+        {isExpanded && (
+          <button
+            onClick={() => toggleExpanded()}
+            className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
+            style={{ color: colors.textTertiary }}
+            title="Minimize"
+          >
+            <Minus size={14} />
+          </button>
+        )}
       </div>
     </div>
   )
