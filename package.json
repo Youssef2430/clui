@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lcoutodemos/clui-cc.git"
+    "url": "https://github.com/Youssef2430/claude-code-desktop.git"
   },
   "bugs": {
-    "url": "https://github.com/lcoutodemos/clui-cc/issues"
+    "url": "https://github.com/Youssef2430/claude-code-desktop/issues"
   },
-  "homepage": "https://github.com/lcoutodemos/clui-cc#readme",
+  "homepage": "https://github.com/Youssef2430/claude-code-desktop#readme",
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
+    "electron-updater": "^6.8.3",
     "framer-motion": "^12.35.1",
     "node-pty": "^1.1.0",
     "react-markdown": "^9.0.0",
@@ -42,6 +43,11 @@
       "resources/**/*",
       "package.json"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "Youssef2430",
+      "repo": "claude-code-desktop"
+    },
     "mac": {
       "icon": "resources/icon.icns",
       "entitlements": "resources/entitlements.mac.plist",

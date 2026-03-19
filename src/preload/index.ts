@@ -49,6 +49,12 @@ export interface CluiAPI {
   onError(callback: (tabId: string, error: EnrichedError) => void): () => void
   onSkillStatus(callback: (status: { name: string; state: string; error?: string; reason?: string }) => void): () => void
   onWindowShown(callback: () => void): () => void
+
+  // ─── Auto-update ───
+  checkForUpdate(): Promise<void>
+  installUpdate(): Promise<void>
+  onUpdateAvailable(callback: (info: { version: string }) => void): () => void
+  onUpdateDownloaded(callback: (info: { version: string }) => void): () => void
 }
 
 const api: CluiAPI = {
@@ -137,6 +143,20 @@ const api: CluiAPI = {
     const handler = () => callback()
     ipcRenderer.on(IPC.WINDOW_SHOWN, handler)
     return () => ipcRenderer.removeListener(IPC.WINDOW_SHOWN, handler)
+  },
+
+  // ─── Auto-update ───
+  checkForUpdate: () => ipcRenderer.invoke(IPC.CHECK_FOR_UPDATE),
+  installUpdate: () => ipcRenderer.invoke(IPC.INSTALL_UPDATE),
+  onUpdateAvailable: (callback) => {
+    const handler = (_e: Electron.IpcRendererEvent, info: { version: string }) => callback(info)
+    ipcRenderer.on(IPC.UPDATE_AVAILABLE, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_AVAILABLE, handler)
+  },
+  onUpdateDownloaded: (callback) => {
+    const handler = (_e: Electron.IpcRendererEvent, info: { version: string }) => callback(info)
+    ipcRenderer.on(IPC.UPDATE_DOWNLOADED, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_DOWNLOADED, handler)
   },
 }
 

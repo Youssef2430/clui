@@ -358,6 +358,13 @@ export const IPC = {
   // Permission mode
   SET_PERMISSION_MODE: 'clui:set-permission-mode',
 
+  // Auto-update
+  CHECK_FOR_UPDATE: 'clui:check-for-update',
+  INSTALL_UPDATE: 'clui:install-update',
+  UPDATE_AVAILABLE: 'clui:update-available',
+  UPDATE_DOWNLOADED: 'clui:update-downloaded',
+  UPDATE_ERROR: 'clui:update-error',
+
   // Legacy (kept for backward compat during migration)
   STREAM_EVENT: 'clui:stream-event',
   RUN_COMPLETE: 'clui:run-complete',

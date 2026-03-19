@@ -285,6 +285,11 @@ interface ThemeState {
   setExpandedUI: (expanded: boolean) => void
   /** Called by OS theme change listener — updates system value */
   setSystemTheme: (isDark: boolean) => void
+  /** Auto-update state */
+  updateVersion: string | null
+  updateReady: boolean
+  setUpdateAvailable: (version: string) => void
+  setUpdateReady: (version: string) => void
 }
 
 /** Convert camelCase token name to --clui-kebab-case CSS custom property */
@@ -362,6 +367,10 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
       applyTheme(isDark)
     }
   },
+  updateVersion: null,
+  updateReady: false,
+  setUpdateAvailable: (version) => set({ updateVersion: version }),
+  setUpdateReady: (version) => set({ updateVersion: version, updateReady: true }),
 }))
 
 // Initialize CSS vars with saved theme

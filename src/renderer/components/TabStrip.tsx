@@ -1,10 +1,10 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, X, Minus } from '@phosphor-icons/react'
+import { Plus, X, Minus, ArrowsClockwise } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { HistoryPicker } from './HistoryPicker'
 import { SettingsPopover } from './SettingsPopover'
-import { useColors } from '../theme'
+import { useColors, useThemeStore } from '../theme'
 import type { TabStatus } from '../../shared/types'
 
 function StatusDot({ status, hasUnread, hasPermission }: { status: TabStatus; hasUnread: boolean; hasPermission: boolean }) {
@@ -33,6 +33,26 @@ function StatusDot({ status, hasUnread, hasPermission }: { status: TabStatus; ha
         ...(glow ? { boxShadow: `0 0 6px 2px ${colors.statusPermissionGlow}` } : {}),
       }}
     />
+  )
+}
+
+function UpdateButton() {
+  const colors = useColors()
+  const updateReady = useThemeStore((s) => s.updateReady)
+  const updateVersion = useThemeStore((s) => s.updateVersion)
+
+  if (!updateReady) return null
+
+  return (
+    <button
+      data-clui-ui
+      onClick={() => window.clui.installUpdate()}
+      className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
+      style={{ color: colors.accent }}
+      title={`Update to v${updateVersion} — click to restart`}
+    >
+      <ArrowsClockwise size={14} />
+    </button>
   )
 }
 
@@ -127,6 +147,8 @@ export function TabStrip() {
         <HistoryPicker />
 
         <SettingsPopover />
+
+        <UpdateButton />
 
         {isExpanded && (
           <button

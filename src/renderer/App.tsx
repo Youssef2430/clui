@@ -32,10 +32,23 @@ export default function App() {
     }).catch(() => {})
 
     // Listen for OS theme changes
-    const unsub = window.clui.onThemeChange((isDark) => {
+    const unsubTheme = window.clui.onThemeChange((isDark) => {
       setSystemTheme(isDark)
     })
-    return unsub
+
+    // Listen for auto-update events
+    const unsubUpdateAvail = window.clui.onUpdateAvailable(({ version }) => {
+      useThemeStore.getState().setUpdateAvailable(version)
+    })
+    const unsubUpdateReady = window.clui.onUpdateDownloaded(({ version }) => {
+      useThemeStore.getState().setUpdateReady(version)
+    })
+
+    return () => {
+      unsubTheme()
+      unsubUpdateAvail()
+      unsubUpdateReady()
+    }
   }, [setSystemTheme])
 
   useEffect(() => {

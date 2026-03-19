@@ -8,6 +8,7 @@ import { ensureSkills, type SkillStatus } from './skills/installer'
 import { fetchCatalog, listInstalled, installPlugin, uninstallPlugin } from './marketplace/catalog'
 import { log as _log, LOG_FILE, flushLogs } from './logger'
 import { getCliEnv } from './cli-env'
+import { autoUpdater } from 'electron-updater'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError } from '../shared/types'
 
@@ -954,12 +955,58 @@ app.whenReady().then(async () => {
   tray = new Tray(trayIcon)
   tray.setToolTip('DesktopCC — Claude Code UI')
   tray.on('click', () => toggleWindow('tray click'))
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
+
+  let pendingUpdateVersion: string | null = null
+
+  function rebuildTrayMenu(): void {
+    if (!tray) return
+    const items: Electron.MenuItemConstructorOptions[] = [
       { label: 'Show DesktopCC', click: () => showWindow('tray menu') },
-      { label: 'Quit', click: () => { app.quit() } },
-    ])
-  )
+    ]
+    if (pendingUpdateVersion) {
+      items.push({
+        label: `Restart to update (v${pendingUpdateVersion})`,
+        click: () => autoUpdater.quitAndInstall(),
+      })
+    }
+    items.push({ label: 'Quit', click: () => { app.quit() } })
+    tray.setContextMenu(Menu.buildFromTemplate(items))
+  }
+
+  rebuildTrayMenu()
+
+  // ─── Auto-updater ───
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.logger = { info: (m: string) => log(`[updater] ${m}`), warn: (m: string) => log(`[updater] WARN ${m}`), error: (m: string) => log(`[updater] ERROR ${m}`), debug: (m: string) => log(`[updater] ${m}`) }
+
+  autoUpdater.on('update-available', (info) => {
+    log(`[updater] update available: v${info.version}`)
+    broadcast(IPC.UPDATE_AVAILABLE, { version: info.version })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    log(`[updater] update downloaded: v${info.version}`)
+    pendingUpdateVersion = info.version
+    rebuildTrayMenu()
+    broadcast(IPC.UPDATE_DOWNLOADED, { version: info.version })
+  })
+
+  autoUpdater.on('error', (err) => {
+    log(`[updater] error: ${err.message}`)
+    broadcast(IPC.UPDATE_ERROR, { message: err.message })
+  })
+
+  ipcMain.handle(IPC.CHECK_FOR_UPDATE, () => autoUpdater.checkForUpdates())
+  ipcMain.handle(IPC.INSTALL_UPDATE, () => {
+    autoUpdater.quitAndInstall()
+  })
+
+  // Initial check + periodic check every 30 minutes
+  autoUpdater.checkForUpdates().catch((err: Error) => log(`[updater] initial check failed: ${err.message}`))
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch((err: Error) => log(`[updater] periodic check failed: ${err.message}`))
+  }, 30 * 60 * 1000)
 
   // app 'activate' fires when macOS brings the app to the foreground (e.g. after
   // webContents.focus() triggers applicationDidBecomeActive on some macOS versions).
