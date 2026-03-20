@@ -1,0 +1,264 @@
+name: Linear Integration
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  link-linear-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Linear issue IDs
+        id: extract
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+        run: |
+          echo "PR Title: $PR_TITLE"
+          echo "Branch: $BRANCH_NAME"
+
+          # Extract Linear issue IDs from branch name and title
+          # Linear issue format: TEAM-123 (e.g., ENG-123, FEAT-456)
+          # Common patterns: feature/ENG-123-description, fix/ENG-123, ENG-123-feature-name
+
+          ALL_TEXT="$PR_TITLE $BRANCH_NAME"
+
+          # Find all Linear-style issue IDs (2-5 uppercase letters followed by dash and numbers)
+          ISSUE_IDS=$(echo "$ALL_TEXT" | grep -oE '[A-Z]{2,5}-[0-9]+' | sort -u | tr '\n' ' ')
+
+          if [ -z "$ISSUE_IDS" ]; then
+            echo "No Linear issue IDs found in PR"
+            echo "found=false" >> $GITHUB_OUTPUT
+          else
+            echo "Found Linear issue IDs: $ISSUE_IDS"
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "issue_ids=$ISSUE_IDS" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for Linear API key
+        if: steps.extract.outputs.found == 'true'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then
+            echo "::error::LINEAR_API_KEY secret is not set. Please add it to the repository secrets."
+            exit 1
+          fi
+
+      - name: Link PR to Linear issues and move to In Review
+        if: steps.extract.outputs.found == 'true'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ISSUE_IDS="${{ steps.extract.outputs.issue_ids }}"
+
+          # Clean the API key (remove any whitespace)
+          LINEAR_API_KEY=$(echo "$LINEAR_API_KEY" | tr -d '[:space:]')
+
+          echo "Processing issues: $ISSUE_IDS"
+          echo "PR URL: $PR_URL"
+
+          # Track successfully linked issues
+          LINKED_ISSUES=""
+
+          # First, get the "In Review" state ID for each team
+          # We'll cache team workflow states to avoid repeated API calls
+
+          declare -A TEAM_IN_REVIEW_STATES
+
+          for ISSUE_ID in $ISSUE_IDS; do
+            echo ""
+            echo "========================================"
+            echo "Processing issue: $ISSUE_ID"
+            echo "========================================"
+
+            # Get the issue details from Linear
+            echo "{\"query\": \"query { issue(id: \\\"$ISSUE_ID\\\") { id identifier title team { id key } state { id name } } }\"}" > /tmp/query.json
+            echo "Query being sent:"
+            cat /tmp/query.json
+            curl -s -D /tmp/headers.txt -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "apollo-require-preflight: 1" \
+              --data-binary @/tmp/query.json > /tmp/response.json
+
+            echo "Response headers:"
+            cat /tmp/headers.txt
+            echo "Response body:"
+            ISSUE_RESPONSE=$(cat /tmp/response.json)
+            echo "$ISSUE_RESPONSE"
+
+            # Check if issue was found
+            ISSUE_INTERNAL_ID=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.id // empty')
+
+            if [ -z "$ISSUE_INTERNAL_ID" ]; then
+              echo "Issue $ISSUE_ID not found in Linear, skipping..."
+              continue
+            fi
+
+            ISSUE_TITLE_LIN=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.title')
+            TEAM_ID=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.team.id')
+            TEAM_KEY=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.team.key')
+            CURRENT_STATE=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.state.name')
+
+            echo "Found issue: $ISSUE_ID - $ISSUE_TITLE_LIN"
+            echo "Team: $TEAM_KEY (ID: $TEAM_ID)"
+            echo "Current state: $CURRENT_STATE"
+
+            # Get "In Review" state ID for this team if not cached
+            if [ -z "${TEAM_IN_REVIEW_STATES[$TEAM_ID]}" ]; then
+              echo "Fetching workflow states for team $TEAM_KEY..."
+
+              echo "{\"query\": \"query { team(id: \\\"$TEAM_ID\\\") { states { nodes { id name type } } } }\"}" > /tmp/query.json
+              STATES_RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
+                -H "Authorization: $LINEAR_API_KEY" \
+                -H "Content-Type: application/json" \
+                -H "apollo-require-preflight: 1" \
+                --data-binary @/tmp/query.json)
+
+              echo "States response: $STATES_RESPONSE"
+
+              # Try to find "In Review" state, or similar states
+              IN_REVIEW_STATE_ID=$(echo "$STATES_RESPONSE" | jq -r '.data.team.states.nodes[] | select(.name == "In Review") | .id // empty' | head -1)
+
+              # If not found, try "In review" (different case)
+              if [ -z "$IN_REVIEW_STATE_ID" ]; then
+                IN_REVIEW_STATE_ID=$(echo "$STATES_RESPONSE" | jq -r '.data.team.states.nodes[] | select(.name | test("(?i)in.?review")) | .id // empty' | head -1)
+              fi
+
+              # If still not found, try "Review" state
+              if [ -z "$IN_REVIEW_STATE_ID" ]; then
+                IN_REVIEW_STATE_ID=$(echo "$STATES_RESPONSE" | jq -r '.data.team.states.nodes[] | select(.name | test("(?i)^review$")) | .id // empty' | head -1)
+              fi
+
+              # If still not found, try any state with type "started" that contains "review"
+              if [ -z "$IN_REVIEW_STATE_ID" ]; then
+                IN_REVIEW_STATE_ID=$(echo "$STATES_RESPONSE" | jq -r '.data.team.states.nodes[] | select(.type == "started") | select(.name | test("(?i)review")) | .id // empty' | head -1)
+              fi
+
+              if [ -z "$IN_REVIEW_STATE_ID" ]; then
+                echo "Warning: Could not find 'In Review' state for team $TEAM_KEY"
+                echo "Available states:"
+                echo "$STATES_RESPONSE" | jq -r '.data.team.states.nodes[] | "\(.name) (\(.type))"'
+              else
+                TEAM_IN_REVIEW_STATES[$TEAM_ID]=$IN_REVIEW_STATE_ID
+                echo "Found 'In Review' state ID: $IN_REVIEW_STATE_ID"
+              fi
+            fi
+
+            IN_REVIEW_STATE_ID="${TEAM_IN_REVIEW_STATES[$TEAM_ID]}"
+
+            # Escape the PR title for JSON
+            ESCAPED_PR_TITLE=$(echo "$PR_TITLE" | jq -Rsa . | sed 's/^"//;s/"$//')
+
+            # Create attachment (link PR to issue)
+            echo "Creating attachment to link PR to issue..."
+
+            echo "{\"query\": \"mutation { attachmentCreate(input: { issueId: \\\"$ISSUE_INTERNAL_ID\\\", url: \\\"$PR_URL\\\", title: \\\"PR #$PR_NUMBER: $ESCAPED_PR_TITLE\\\" }) { success attachment { id url } } }\"}" > /tmp/query.json
+            ATTACHMENT_RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "apollo-require-preflight: 1" \
+              --data-binary @/tmp/query.json)
+
+            echo "Attachment response: $ATTACHMENT_RESPONSE"
+
+            ATTACHMENT_SUCCESS=$(echo "$ATTACHMENT_RESPONSE" | jq -r '.data.attachmentCreate.success // false')
+
+            if [ "$ATTACHMENT_SUCCESS" == "true" ]; then
+              echo "Successfully linked PR to issue $ISSUE_ID"
+              LINKED_ISSUES="$LINKED_ISSUES $ISSUE_ID"
+            else
+              echo "Note: Attachment may already exist or there was an issue creating it"
+            fi
+
+            # Move issue to "In Review" state if we found the state
+            if [ -n "$IN_REVIEW_STATE_ID" ]; then
+              echo "Moving issue to 'In Review' state..."
+
+              echo "{\"query\": \"mutation { issueUpdate(id: \\\"$ISSUE_INTERNAL_ID\\\", input: { stateId: \\\"$IN_REVIEW_STATE_ID\\\" }) { success issue { id identifier state { name } } } }\"}" > /tmp/query.json
+              UPDATE_RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
+                -H "Authorization: $LINEAR_API_KEY" \
+                -H "Content-Type: application/json" \
+                -H "apollo-require-preflight: 1" \
+                --data-binary @/tmp/query.json)
+
+              echo "Update response: $UPDATE_RESPONSE"
+
+              UPDATE_SUCCESS=$(echo "$UPDATE_RESPONSE" | jq -r '.data.issueUpdate.success // false')
+              NEW_STATE=$(echo "$UPDATE_RESPONSE" | jq -r '.data.issueUpdate.issue.state.name // "unknown"')
+
+              if [ "$UPDATE_SUCCESS" == "true" ]; then
+                echo "Successfully moved issue $ISSUE_ID to state: $NEW_STATE"
+              else
+                echo "Failed to update issue state"
+              fi
+            else
+              echo "Skipping state update - 'In Review' state not found for team"
+            fi
+
+            echo "Done processing issue $ISSUE_ID"
+          done
+
+          echo ""
+          echo "========================================"
+          echo "Linear integration complete!"
+          echo "========================================"
+
+          # Save linked issues for the comment step
+          echo "$LINKED_ISSUES" > /tmp/linked_issues.txt
+
+      - name: Post summary comment
+        if: steps.extract.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_IDS="${{ steps.extract.outputs.issue_ids }}"
+
+          # Create comment body in a file for proper formatting
+          cat > /tmp/linear_comment.md << 'EOF'
+          ## Linear Integration
+
+          This PR has been linked to the following Linear issue(s) and their status has been updated to **In Review**:
+
+          EOF
+
+          # Build issue links
+          for ISSUE_ID in $ISSUE_IDS; do
+            echo "- [$ISSUE_ID](https://linear.app/issue/$ISSUE_ID)" >> /tmp/linear_comment.md
+          done
+
+          cat >> /tmp/linear_comment.md << 'EOF'
+
+          ---
+          *This comment was automatically generated by the Linear Integration workflow.*
+          EOF
+
+          # Find and delete previous bot comments with this header
+          COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | select(.body | startswith("## Linear Integration")) | .id' 2>/dev/null || echo "")
+
+          for comment_id in $COMMENTS; do
+            gh api -X DELETE repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments/$comment_id 2>/dev/null || true
+          done
+
+          # Post the new comment
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/linear_comment.md
+
+      - name: No Linear issues found
+        if: steps.extract.outputs.found != 'true'
+        run: |
+          echo "No Linear issue IDs were found in the PR title, description, or branch name."
+          echo "To link this PR to a Linear issue, include the issue ID (e.g., ENG-123) in:"
+          echo "  - The branch name (e.g., feature/ENG-123-add-feature)"
+          echo "  - The PR title (e.g., 'ENG-123: Add new feature')"
+          echo "  - The PR description"

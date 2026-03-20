@@ -1,0 +1,210 @@
+name: PR Review Effort Analysis
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  analyze-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for API key
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "::error::OPENROUTER_API_KEY secret is not set. Please add it to the repository secrets."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR diff
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch origin "$BASE_REF"
+          git diff "origin/$BASE_REF...HEAD" > /tmp/pr_diff.txt
+          git diff --stat "origin/$BASE_REF...HEAD" > /tmp/files_changed.txt
+          git diff --shortstat "origin/$BASE_REF...HEAD" > /tmp/stats.txt
+          git diff --name-only "origin/$BASE_REF...HEAD" > /tmp/file_list.txt
+
+      - name: Analyze PR with LLM
+        id: analyze
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4' }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          # Clean the API key (remove any whitespace that might have been added when setting secret)
+          OPENROUTER_API_KEY=$(echo "$OPENROUTER_API_KEY" | tr -d '[:space:]')
+
+          # Read files and clean content
+          DIFF=$(head -c 30000 /tmp/pr_diff.txt | tr -cd '[:print:]\n\t')
+          FILES_CHANGED=$(cat /tmp/files_changed.txt | tr -cd '[:print:]\n\t')
+          STATS=$(cat /tmp/stats.txt | tr -cd '[:print:]\n\t')
+          FILE_LIST=$(cat /tmp/file_list.txt | tr -cd '[:print:]\n\t')
+          CLEAN_PR_TITLE=$(echo "$PR_TITLE" | tr -cd '[:print:]\n\t')
+
+          # Build the prompt
+          printf '%s\n' "You are a code review assistant. Analyze this Pull Request and provide:" > /tmp/prompt.txt
+          printf '%s\n' "" >> /tmp/prompt.txt
+          printf '%s\n' "1. A review effort score from 1 to 5 where:" >> /tmp/prompt.txt
+          printf '%s\n' "   - 1/5 = Trivial changes (typos, small config changes, less than 10 lines)" >> /tmp/prompt.txt
+          printf '%s\n' "   - 2/5 = Small changes (simple bug fixes, minor features, 10-50 lines)" >> /tmp/prompt.txt
+          printf '%s\n' "   - 3/5 = Medium changes (new features, refactoring, 50-200 lines)" >> /tmp/prompt.txt
+          printf '%s\n' "   - 4/5 = Large changes (significant features, architectural changes, 200-500 lines)" >> /tmp/prompt.txt
+          printf '%s\n' "   - 5/5 = Major changes (large scale refactoring, new systems, more than 500 lines)" >> /tmp/prompt.txt
+          printf '%s\n' "" >> /tmp/prompt.txt
+          printf '%s\n' "2. A mermaid diagram showing the changes made in this PR. The diagram should show the files/components that were modified and their relationships." >> /tmp/prompt.txt
+          printf '%s\n' "" >> /tmp/prompt.txt
+          printf '%s\n' "IMPORTANT - Respond ONLY with valid JSON in this exact format, no other text:" >> /tmp/prompt.txt
+          printf '%s\n' '{"effort": NUMBER_1_TO_5, "effort_reason": "BRIEF_EXPLANATION", "mermaid_diagram": "MERMAID_CODE"}' >> /tmp/prompt.txt
+          printf '%s\n' "" >> /tmp/prompt.txt
+          printf '%s\n' "PR Title: $CLEAN_PR_TITLE" >> /tmp/prompt.txt
+          printf '%s\n' "" >> /tmp/prompt.txt
+          printf '%s\n' "Files Changed:" >> /tmp/prompt.txt
+          printf '%s\n' "$FILES_CHANGED" >> /tmp/prompt.txt
+          printf '%s\n' "" >> /tmp/prompt.txt
+          printf '%s\n' "Stats: $STATS" >> /tmp/prompt.txt
+          printf '%s\n' "" >> /tmp/prompt.txt
+          printf '%s\n' "File List:" >> /tmp/prompt.txt
+          printf '%s\n' "$FILE_LIST" >> /tmp/prompt.txt
+          printf '%s\n' "" >> /tmp/prompt.txt
+          printf '%s\n' "Diff (truncated):" >> /tmp/prompt.txt
+          printf '%s\n' "$DIFF" >> /tmp/prompt.txt
+
+          # Create request JSON using jq with rawfile
+          jq -n \
+            --arg model "$OPENROUTER_MODEL" \
+            --rawfile content /tmp/prompt.txt \
+            '{model: $model, messages: [{role: "user", content: $content}], temperature: 0.3, max_tokens: 4000}' > /tmp/request.json
+
+          if ! jq empty /tmp/request.json 2>/dev/null; then
+            echo "Error: Invalid JSON generated"
+            exit 1
+          fi
+
+          # Call OpenRouter API
+          HTTP_CODE=$(curl -s -w "%{http_code}" -o /tmp/api_response.json \
+            --connect-timeout 30 --max-time 120 \
+            -X POST "https://openrouter.ai/api/v1/chat/completions" \
+            -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -H "HTTP-Referer: https://github.com/$GITHUB_REPOSITORY" \
+            -H "X-Title: PR Review Analysis" \
+            --data-binary @/tmp/request.json)
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Error: API returned status $HTTP_CODE"
+            cat /tmp/api_response.json
+            exit 1
+          fi
+
+          RESPONSE=$(cat /tmp/api_response.json)
+          CONTENT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+
+          if [ -z "$CONTENT" ]; then
+            echo "Error: No content in API response"
+            exit 1
+          fi
+
+          # Parse JSON response (handle markdown code blocks)
+          CLEAN_CONTENT=$(echo "$CONTENT" | sed 's/^```json//g' | sed 's/^```//g' | sed 's/```$//g' | tr -d '\r')
+          EFFORT=$(echo "$CLEAN_CONTENT" | jq -r '.effort // 3' 2>/dev/null || echo "3")
+          EFFORT_REASON=$(echo "$CLEAN_CONTENT" | jq -r '.effort_reason // "Unable to determine"' 2>/dev/null || echo "Unable to determine")
+          MERMAID=$(echo "$CLEAN_CONTENT" | jq -r '.mermaid_diagram // "graph LR; A[Changes] --> B[PR]"' 2>/dev/null || echo "graph LR; A[Changes] --> B[PR]")
+
+          echo "$EFFORT" > /tmp/effort.txt
+          echo "$EFFORT_REASON" > /tmp/effort_reason.txt
+          echo "$MERMAID" > /tmp/mermaid.txt
+          echo "effort=$EFFORT" >> $GITHUB_OUTPUT
+
+      - name: Remove existing effort labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          LABELS=$(gh pr view "$PR_NUMBER" --json labels -q '.labels[].name' 2>/dev/null || echo "")
+          for label in $LABELS; do
+            if [[ "$label" == "Review effort"* ]]; then
+              gh pr edit "$PR_NUMBER" --remove-label "$label" || true
+            fi
+          done
+
+      - name: Create labels if they don't exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          declare -A COLORS=(
+            ["Review effort 1/5"]="0e8a16"
+            ["Review effort 2/5"]="7dc242"
+            ["Review effort 3/5"]="fbca04"
+            ["Review effort 4/5"]="f97d2c"
+            ["Review effort 5/5"]="d93f0b"
+          )
+          declare -A DESCRIPTIONS=(
+            ["Review effort 1/5"]="Trivial changes - quick review"
+            ["Review effort 2/5"]="Small changes - light review"
+            ["Review effort 3/5"]="Medium changes - standard review"
+            ["Review effort 4/5"]="Large changes - thorough review needed"
+            ["Review effort 5/5"]="Major changes - extensive review required"
+          )
+          for label in "${!COLORS[@]}"; do
+            gh label create "$label" --color "${COLORS[$label]}" --description "${DESCRIPTIONS[$label]}" 2>/dev/null || true
+          done
+
+      - name: Add effort label to PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          EFFORT=$(cat /tmp/effort.txt)
+          LABEL="Review effort ${EFFORT}/5"
+          gh pr edit "$PR_NUMBER" --add-label "$LABEL"
+
+      - name: Post mermaid diagram comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          EFFORT=$(cat /tmp/effort.txt)
+          EFFORT_REASON=$(cat /tmp/effort_reason.txt)
+          MERMAID=$(cat /tmp/mermaid.txt)
+
+          # Build comment
+          printf '%s\n' "## PR Analysis" > /tmp/comment.md
+          printf '%s\n' "" >> /tmp/comment.md
+          printf '%s\n' "### Review Effort: ${EFFORT}/5" >> /tmp/comment.md
+          printf '%s\n' "" >> /tmp/comment.md
+          printf '%s\n' "${EFFORT_REASON}" >> /tmp/comment.md
+          printf '%s\n' "" >> /tmp/comment.md
+          printf '%s\n' "### Changes Diagram" >> /tmp/comment.md
+          printf '%s\n' "" >> /tmp/comment.md
+          printf '%s\n' '```mermaid' >> /tmp/comment.md
+          printf '%s\n' "${MERMAID}" >> /tmp/comment.md
+          printf '%s\n' '```' >> /tmp/comment.md
+          printf '%s\n' "" >> /tmp/comment.md
+          printf '%s\n' "---" >> /tmp/comment.md
+          printf '%s\n' "*This analysis was automatically generated by the PR Review Effort workflow.*" >> /tmp/comment.md
+
+          # Delete previous bot comments (only from github-actions bot)
+          COMMENTS=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --jq '.[] | select(.body | startswith("## PR Analysis")) | select(.user.login == "github-actions[bot]") | .id' 2>/dev/null || echo "")
+          for comment_id in $COMMENTS; do
+            gh api -X DELETE "repos/$REPO/issues/$PR_NUMBER/comments/$comment_id" 2>/dev/null || true
+          done
+
+          gh pr comment "$PR_NUMBER" --body-file /tmp/comment.md
