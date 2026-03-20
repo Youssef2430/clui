@@ -351,12 +351,16 @@ export const useSessionStore = create<State>((set, get) => ({
   },
 
   resumeSession: async (sessionId, title, projectPath) => {
-    const defaultDir = projectPath || get().staticInfo?.homePath || '~'
+    // projectPath may be an encoded dir name (e.g. "-Users-foo-bar") from LIST_ALL_SESSIONS
+    // or a real filesystem path. Encoded names are used for JSONL lookups; real paths for workingDirectory.
+    const isEncodedDir = projectPath?.startsWith('-') && !projectPath?.includes('/')
+    const lookupDir = projectPath || get().staticInfo?.homePath || '~'
+    const workingDir = isEncodedDir ? (get().staticInfo?.homePath || '~') : lookupDir
     try {
       const { tabId } = await window.clui.createTab()
 
       // Load previous conversation messages from the JSONL file
-      const history = await window.clui.loadSession(sessionId, defaultDir).catch(() => [])
+      const history = await window.clui.loadSession(sessionId, lookupDir).catch(() => [])
       const messages: Message[] = history.map((m) => ({
         id: nextMsgId(),
         role: m.role as Message['role'],
@@ -372,8 +376,8 @@ export const useSessionStore = create<State>((set, get) => ({
         id: tabId,
         claudeSessionId: sessionId,
         title: title || 'Resumed Session',
-        workingDirectory: defaultDir,
-        hasChosenDirectory: !!projectPath,
+        workingDirectory: workingDir,
+        hasChosenDirectory: !isEncodedDir && !!projectPath,
         messages,
       }
       set((s) => ({
@@ -385,7 +389,7 @@ export const useSessionStore = create<State>((set, get) => ({
       // Pre-fetch tool results for resumed sessions
       const toolMsgs = messages.filter((m) => m.role === 'tool' && m.toolId)
       if (toolMsgs.length > 0) {
-        window.clui.getToolResults(sessionId, defaultDir).then((results) => {
+        window.clui.getToolResults(sessionId, lookupDir).then((results) => {
           if (!results || Object.keys(results).length === 0) return
           set((s) => ({
             tabs: s.tabs.map((t) => {
@@ -409,8 +413,8 @@ export const useSessionStore = create<State>((set, get) => ({
       const tab = makeLocalTab()
       tab.claudeSessionId = sessionId
       tab.title = title || 'Resumed Session'
-      tab.workingDirectory = defaultDir
-      tab.hasChosenDirectory = !!projectPath
+      tab.workingDirectory = workingDir
+      tab.hasChosenDirectory = !isEncodedDir && !!projectPath
       set((s) => ({
         tabs: [...s.tabs, tab],
         activeTabId: tab.id,

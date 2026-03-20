@@ -681,8 +681,10 @@ function ToolResultAccordion({ tool }: { tool: Message }) {
       setOpen(!open)
       return
     }
+    // Already open — just close
+    if (open) { setOpen(false); return }
     // Try to fetch result from JSONL
-    if (!tool.toolId) { setOpen(!open); return }
+    if (!tool.toolId) { setOpen(true); return }
     setOpen(true)
     setLoading(true)
     try {

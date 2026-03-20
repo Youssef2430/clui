@@ -369,7 +369,7 @@ ipcMain.handle(IPC.LIST_SESSIONS, async (_e, projectPath?: string) => {
     }
     const files = readdirSync(sessionsDir).filter((f: string) => f.endsWith('.jsonl'))
 
-    const sessions: Array<{ sessionId: string; slug: string | null; firstMessage: string | null; lastTimestamp: string; size: number }> = []
+    const sessions: Array<{ sessionId: string; slug: string | null; firstMessage: string | null; lastTimestamp: string; size: number; projectPath: string }> = []
 
     // UUID v4 regex — only consider files named as valid UUIDs
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -527,7 +527,7 @@ ipcMain.handle(IPC.LOAD_SESSION, async (_e, arg: { sessionId: string; projectPat
     const filePath = join(homedir(), '.claude', 'projects', encodedPath, `${sessionId}.jsonl`)
     if (!existsSync(filePath)) return []
 
-    const messages: Array<{ role: string; content: string; toolName?: string; timestamp: number }> = []
+    const messages: Array<{ role: string; content: string; toolName?: string; toolId?: string; timestamp: number }> = []
     await new Promise<void>((resolve) => {
       const rl = createInterface({ input: createReadStream(filePath) })
       rl.on('line', (line: string) => {

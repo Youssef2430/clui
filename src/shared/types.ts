@@ -269,7 +269,8 @@ export interface SessionMeta {
   firstMessage: string | null
   lastTimestamp: string
   size: number
-  /** The original project path this session was started from */
+  /** Project identifier — a real filesystem path (from LIST_SESSIONS) or
+   *  an encoded directory name like "-Users-foo-bar" (from LIST_ALL_SESSIONS). */
   projectPath?: string
 }
 
