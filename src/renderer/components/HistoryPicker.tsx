@@ -25,8 +25,15 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}M`
 }
 
-/** Show the last segment of a path, e.g. '/Users/foo/myproject' → 'myproject' */
+/** Show the last segment of a path or encoded dir name.
+ *  Encoded: '-Users-foo-myproject' → 'myproject'
+ *  Real: '/Users/foo/myproject' → 'myproject' */
 function shortPath(p: string): string {
+  if (p.startsWith('-') && !p.includes('/')) {
+    // Encoded directory name — split on '-' and take the last segment
+    const parts = p.split('-').filter(Boolean)
+    return parts[parts.length - 1] || p
+  }
   const parts = p.replace(/\/+$/, '').split('/')
   return parts[parts.length - 1] || p
 }

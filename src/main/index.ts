@@ -347,13 +347,21 @@ ipcMain.handle(IPC.RESPOND_PERMISSION, (_event, { tabId, questionId, optionId }:
   return controlPlane.respondToPermission(tabId, questionId, optionId)
 })
 
+/** Encode a project path to match Claude Code CLI's session directory naming.
+ *  If the value is already an encoded dir name (starts with '-'), use it as-is. */
+function encodeProjectPath(pathOrEncoded: string): string {
+  // Already encoded (from LIST_ALL_SESSIONS results)
+  if (pathOrEncoded.startsWith('-') && !pathOrEncoded.includes('/')) return pathOrEncoded
+  return pathOrEncoded.replace(/[/_]/g, '-')
+}
+
 ipcMain.handle(IPC.LIST_SESSIONS, async (_e, projectPath?: string) => {
   log(`IPC LIST_SESSIONS ${projectPath ? `(path=${projectPath})` : ''}`)
   try {
     const cwd = projectPath || process.cwd()
     // Claude stores project sessions at ~/.claude/projects/<encoded-path>/
-    // Path encoding: replace all '/' with '-' (leading '/' becomes leading '-')
-    const encodedPath = cwd.replace(/\//g, '-')
+    // Path encoding: replace '/' and '_' with '-' (matching Claude Code CLI behavior)
+    const encodedPath = encodeProjectPath(cwd)
     const sessionsDir = join(homedir(), '.claude', 'projects', encodedPath)
     if (!existsSync(sessionsDir)) {
       log(`LIST_SESSIONS: directory not found: ${sessionsDir}`)
@@ -443,9 +451,9 @@ ipcMain.handle(IPC.LIST_ALL_SESSIONS, async () => {
 
     for (const dir of projectDirs) {
       const sessionsDir = join(projectsRoot, dir)
-      // Decode the project path: leading '-' becomes '/', remaining '-' that were '/' are tricky.
-      // The encoding is: path.replace(/\//g, '-'), so we reverse it.
-      const decodedPath = dir.replace(/-/g, '/')
+      // The encoded dir name is the canonical project identifier.
+      // We store it as-is since decoding is lossy ('/' and '_' both encode to '-').
+      const encodedDir = dir
 
       let files: string[]
       try { files = readdirSync(sessionsDir).filter((f: string) => f.endsWith('.jsonl')) } catch { continue }
@@ -494,7 +502,7 @@ ipcMain.handle(IPC.LIST_ALL_SESSIONS, async () => {
             firstMessage: meta.firstMessage,
             lastTimestamp: meta.lastTimestamp || stat.mtime.toISOString(),
             size: stat.size,
-            projectPath: decodedPath,
+            projectPath: encodedDir,
           })
         }
       }
@@ -515,7 +523,7 @@ ipcMain.handle(IPC.LOAD_SESSION, async (_e, arg: { sessionId: string; projectPat
   log(`IPC LOAD_SESSION ${sessionId}${projectPath ? ` (path=${projectPath})` : ''}`)
   try {
     const cwd = projectPath || process.cwd()
-    const encodedPath = cwd.replace(/\//g, '-')
+    const encodedPath = encodeProjectPath(cwd)
     const filePath = join(homedir(), '.claude', 'projects', encodedPath, `${sessionId}.jsonl`)
     if (!existsSync(filePath)) return []
 
@@ -575,7 +583,7 @@ ipcMain.handle(IPC.GET_TOOL_RESULTS, async (_e, arg: { sessionId: string; projec
   const { sessionId, projectPath } = arg
   log(`IPC GET_TOOL_RESULTS ${sessionId}`)
   try {
-    const encodedPath = projectPath.replace(/\//g, '-')
+    const encodedPath = encodeProjectPath(projectPath)
     const filePath = join(homedir(), '.claude', 'projects', encodedPath, `${sessionId}.jsonl`)
     if (!existsSync(filePath)) return {}
 
