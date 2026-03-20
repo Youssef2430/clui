@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { Clock, ChatCircle } from '@phosphor-icons/react'
+import { Clock, ChatCircle, FolderSimple } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
@@ -25,6 +25,14 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}M`
 }
 
+/** Show the last segment of a path, e.g. '/Users/foo/myproject' → 'myproject' */
+function shortPath(p: string): string {
+  const parts = p.replace(/\/+$/, '').split('/')
+  return parts[parts.length - 1] || p
+}
+
+type HistoryScope = 'project' | 'all'
+
 export function HistoryPicker() {
   const resumeSession = useSessionStore((s) => s.resumeSession)
   const isExpanded = useSessionStore((s) => s.isExpanded)
@@ -40,6 +48,7 @@ export function HistoryPicker() {
     : (staticInfo?.homePath || activeTab?.workingDirectory || '~')
 
   const [open, setOpen] = useState(false)
+  const [scope, setScope] = useState<HistoryScope>('all')
   const [sessions, setSessions] = useState<SessionMeta[]>([])
   const [loading, setLoading] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -64,10 +73,12 @@ export function HistoryPicker() {
     }
   }, [isExpanded])
 
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (s: HistoryScope) => {
     setLoading(true)
     try {
-      const result = await window.clui.listSessions(effectiveProjectPath)
+      const result = s === 'all'
+        ? await window.clui.listAllSessions()
+        : await window.clui.listSessions(effectiveProjectPath)
       setSessions(result)
     } catch {
       setSessions([])
@@ -90,9 +101,14 @@ export function HistoryPicker() {
   const handleToggle = () => {
     if (!open) {
       updatePos()
-      void loadSessions()
+      void loadSessions(scope)
     }
     setOpen((o) => !o)
+  }
+
+  const handleScopeChange = (newScope: HistoryScope) => {
+    setScope(newScope)
+    void loadSessions(newScope)
   }
 
   const handleSelect = (session: SessionMeta) => {
@@ -100,7 +116,9 @@ export function HistoryPicker() {
     const title = session.firstMessage
       ? (session.firstMessage.length > 30 ? session.firstMessage.substring(0, 27) + '...' : session.firstMessage)
       : session.slug || 'Resumed'
-    void resumeSession(session.sessionId, title, effectiveProjectPath)
+    // Use the session's original project path if available, otherwise fall back to current
+    const projectPath = session.projectPath || effectiveProjectPath
+    void resumeSession(session.sessionId, title, projectPath)
   }
 
   return (
@@ -129,7 +147,7 @@ export function HistoryPicker() {
             ...(pos.top != null ? { top: pos.top } : {}),
             ...(pos.bottom != null ? { bottom: pos.bottom } : {}),
             right: pos.right,
-            width: 280,
+            width: 300,
             pointerEvents: 'auto',
             background: colors.popoverBg,
             backdropFilter: 'blur(20px)',
@@ -142,11 +160,33 @@ export function HistoryPicker() {
             flexDirection: 'column' as const,
           }}
         >
-          <div className="px-3 py-2 text-[11px] font-medium flex-shrink-0" style={{ color: colors.textTertiary, borderBottom: `1px solid ${colors.popoverBorder}` }}>
-            Recent Sessions
+          {/* Header with scope toggle */}
+          <div className="px-3 py-2 flex items-center justify-between flex-shrink-0" style={{ borderBottom: `1px solid ${colors.popoverBorder}` }}>
+            <span className="text-[11px] font-medium" style={{ color: colors.textTertiary }}>
+              Recent Sessions
+            </span>
+            <div
+              className="flex rounded-md overflow-hidden"
+              style={{ border: `1px solid ${colors.toolBorder}` }}
+            >
+              {(['project', 'all'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => handleScopeChange(s)}
+                  className="text-[10px] px-2 py-0.5 transition-colors"
+                  style={{
+                    background: scope === s ? colors.surfaceHover : 'transparent',
+                    color: scope === s ? colors.textPrimary : colors.textTertiary,
+                    border: 'none',
+                  }}
+                >
+                  {s === 'project' ? 'Project' : 'All'}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="overflow-y-auto py-1" style={{ maxHeight: pos.maxHeight != null ? undefined : 180 }}>
+          <div className="overflow-y-auto py-1" style={{ maxHeight: pos.maxHeight != null ? undefined : 240 }}>
             {loading && (
               <div className="px-3 py-4 text-center text-[11px]" style={{ color: colors.textTertiary }}>
                 Loading...
@@ -175,6 +215,13 @@ export function HistoryPicker() {
                     <span>{formatSize(session.size)}</span>
                     {session.slug && <span className="truncate">{session.slug}</span>}
                   </div>
+                  {/* Show project path when viewing all sessions */}
+                  {scope === 'all' && session.projectPath && (
+                    <div className="flex items-center gap-1 text-[9px] mt-0.5" style={{ color: colors.textTertiary, opacity: 0.7 }}>
+                      <FolderSimple size={9} className="flex-shrink-0" />
+                      <span className="truncate">{shortPath(session.projectPath)}</span>
+                    </div>
+                  )}
                 </div>
               </button>
             ))}

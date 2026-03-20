@@ -362,6 +362,7 @@ export const useSessionStore = create<State>((set, get) => ({
         role: m.role as Message['role'],
         content: m.content,
         toolName: m.toolName,
+        toolId: m.toolId,
         toolStatus: m.toolName ? 'completed' as const : undefined,
         timestamp: m.timestamp,
       }))
@@ -380,6 +381,28 @@ export const useSessionStore = create<State>((set, get) => ({
         activeTabId: tab.id,
         isExpanded: true,
       }))
+
+      // Pre-fetch tool results for resumed sessions
+      const toolMsgs = messages.filter((m) => m.role === 'tool' && m.toolId)
+      if (toolMsgs.length > 0) {
+        window.clui.getToolResults(sessionId, defaultDir).then((results) => {
+          if (!results || Object.keys(results).length === 0) return
+          set((s) => ({
+            tabs: s.tabs.map((t) => {
+              if (t.id !== tabId) return t
+              return {
+                ...t,
+                messages: t.messages.map((m) => {
+                  if (m.role === 'tool' && m.toolId && results[m.toolId]) {
+                    return { ...m, toolResult: results[m.toolId] }
+                  }
+                  return m
+                }),
+              }
+            }),
+          }))
+        }).catch(() => {})
+      }
       // Don't call initSession — the first real prompt will use --resume with the sessionId
       return tabId
     } catch {
@@ -634,6 +657,16 @@ export const useSessionStore = create<State>((set, get) => ({
             break
 
           case 'text_chunk': {
+            // Subagent text → accumulate as toolResult on the parent tool message
+            if (event.parentToolUseId) {
+              const parentTool = updated.messages.find(
+                (m) => m.role === 'tool' && m.toolId === event.parentToolUseId
+              )
+              if (parentTool) {
+                parentTool.toolResult = (parentTool.toolResult || '') + event.text
+              }
+              break
+            }
             updated.currentActivity = 'Writing...'
             const lastMsg = updated.messages[updated.messages.length - 1]
             if (lastMsg?.role === 'assistant' && !lastMsg.toolName) {
@@ -651,6 +684,8 @@ export const useSessionStore = create<State>((set, get) => ({
           }
 
           case 'tool_call':
+            // Skip subagent tool calls — they're internal to the agent
+            if (event.parentToolUseId) break
             updated.currentActivity = `Running ${event.toolName}...`
             updated.messages = [
               ...updated.messages,
@@ -659,6 +694,7 @@ export const useSessionStore = create<State>((set, get) => ({
                 role: 'tool',
                 content: '',
                 toolName: event.toolName,
+                toolId: event.toolId,
                 toolInput: '',
                 toolStatus: 'running',
                 timestamp: Date.now(),
@@ -667,6 +703,8 @@ export const useSessionStore = create<State>((set, get) => ({
             break
 
           case 'tool_call_update': {
+            // Skip subagent tool call updates
+            if (event.parentToolUseId) break
             const msgs = [...updated.messages]
             const lastTool = [...msgs].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
             if (lastTool) {
@@ -677,6 +715,8 @@ export const useSessionStore = create<State>((set, get) => ({
           }
 
           case 'tool_call_complete': {
+            // Skip subagent tool call completions
+            if (event.parentToolUseId) break
             const msgs2 = [...updated.messages]
             const runningTool = [...msgs2].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
             if (runningTool) {
@@ -716,7 +756,7 @@ export const useSessionStore = create<State>((set, get) => ({
                 }
               }
 
-              // ── Tool card deduplication (unchanged) ──
+              // ── Tool card deduplication ──
               for (const block of event.message.content) {
                 if (block.type === 'tool_use' && block.name) {
                   const exists = updated.messages.find(
@@ -730,11 +770,15 @@ export const useSessionStore = create<State>((set, get) => ({
                         role: 'tool',
                         content: '',
                         toolName: block.name,
+                        toolId: block.id,
                         toolInput: JSON.stringify(block.input, null, 2),
                         toolStatus: 'completed',
                         timestamp: Date.now(),
                       },
                     ]
+                  } else if (block.id && !exists.toolId) {
+                    // Backfill toolId if the streaming path created it without one
+                    exists.toolId = block.id
                   }
                 }
               }
@@ -836,6 +880,17 @@ export const useSessionStore = create<State>((set, get) => ({
             break
           }
 
+          case 'agent_progress': {
+            // Find the parent tool message by toolId and append progress
+            const parentMsg = updated.messages.find(
+              (m) => m.role === 'tool' && m.toolId === event.toolUseId
+            )
+            if (parentMsg) {
+              parentMsg.toolResult = (parentMsg.toolResult || '') + event.content + '\n'
+            }
+            break
+          }
+
           case 'rate_limit':
             if (event.status !== 'allowed') {
               updated.messages = [
@@ -856,6 +911,31 @@ export const useSessionStore = create<State>((set, get) => ({
 
       return { tabs }
     })
+
+    // After task_complete, fetch tool results from the session JSONL file
+    if (event.type === 'task_complete') {
+      const tab = get().tabs.find((t) => t.id === tabId)
+      if (tab?.claudeSessionId) {
+        const toolMsgs = tab.messages.filter((m) => m.role === 'tool' && m.toolId && !m.toolResult)
+        if (toolMsgs.length > 0) {
+          window.clui.getToolResults(tab.claudeSessionId, tab.workingDirectory).then((results) => {
+            if (!results || Object.keys(results).length === 0) return
+            set((s) => ({
+              tabs: s.tabs.map((t) => {
+                if (t.id !== tabId) return t
+                const updatedMsgs = t.messages.map((m) => {
+                  if (m.role === 'tool' && m.toolId && results[m.toolId] && !m.toolResult) {
+                    return { ...m, toolResult: results[m.toolId] }
+                  }
+                  return m
+                })
+                return { ...t, messages: updatedMsgs }
+              }),
+            }))
+          }).catch(() => {})
+        }
+      }
+    }
   },
 
   handleStatusChange: (tabId, newStatus) => {

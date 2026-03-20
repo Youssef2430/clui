@@ -41,17 +41,17 @@ function UpdateButton() {
   const updateReady = useThemeStore((s) => s.updateReady)
   const updateVersion = useThemeStore((s) => s.updateVersion)
 
-  if (!updateReady) return null
+  if (!updateVersion) return null
 
   return (
     <button
       data-clui-ui
-      onClick={() => window.clui.installUpdate()}
+      onClick={updateReady ? () => window.clui.installUpdate() : undefined}
       className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
-      style={{ color: colors.accent }}
-      title={`Update to v${updateVersion} — click to restart`}
+      style={{ color: colors.accent, cursor: updateReady ? 'pointer' : 'default' }}
+      title={updateReady ? `Update to v${updateVersion} — click to restart` : `Downloading v${updateVersion}…`}
     >
-      <ArrowsClockwise size={14} />
+      <ArrowsClockwise size={14} className={updateReady ? '' : 'animate-spin'} />
     </button>
   )
 }

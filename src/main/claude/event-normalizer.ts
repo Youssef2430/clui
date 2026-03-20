@@ -37,6 +37,9 @@ export function normalize(raw: ClaudeEvent): NormalizedEvent[] {
     case 'permission_request':
       return normalizePermission(raw as PermissionEvent)
 
+    case 'progress':
+      return normalizeProgress(raw)
+
     default:
       // Unknown event type — skip silently (defensive)
       return []
@@ -60,6 +63,7 @@ function normalizeSystem(event: InitEvent): NormalizedEvent[] {
 function normalizeStreamEvent(event: StreamEvent): NormalizedEvent[] {
   const sub = event.event
   if (!sub) return []
+  const parentId = event.parent_tool_use_id || null
 
   switch (sub.type) {
     case 'content_block_start': {
@@ -69,6 +73,7 @@ function normalizeStreamEvent(event: StreamEvent): NormalizedEvent[] {
           toolName: sub.content_block.name || 'unknown',
           toolId: sub.content_block.id || '',
           index: sub.index,
+          parentToolUseId: parentId,
         }]
       }
       // text block start — no event needed, text comes via deltas
@@ -78,13 +83,14 @@ function normalizeStreamEvent(event: StreamEvent): NormalizedEvent[] {
     case 'content_block_delta': {
       const delta = sub.delta as ContentDelta
       if (delta.type === 'text_delta') {
-        return [{ type: 'text_chunk', text: delta.text }]
+        return [{ type: 'text_chunk', text: delta.text, parentToolUseId: parentId }]
       }
       if (delta.type === 'input_json_delta') {
         return [{
           type: 'tool_call_update',
           toolId: '', // caller can associate via index tracking
           partialInput: delta.partial_json,
+          parentToolUseId: parentId,
         }]
       }
       return []
@@ -94,6 +100,7 @@ function normalizeStreamEvent(event: StreamEvent): NormalizedEvent[] {
       return [{
         type: 'tool_call_complete',
         index: sub.index,
+        parentToolUseId: parentId,
       }]
     }
 
@@ -153,6 +160,51 @@ function normalizeRateLimit(event: RateLimitEvent): NormalizedEvent[] {
     status: info.status,
     resetsAt: info.resetsAt,
     rateLimitType: info.rateLimitType,
+  }]
+}
+
+function normalizeProgress(raw: any): NormalizedEvent[] {
+  const parentToolUseId = raw.parentToolUseID
+  if (!parentToolUseId) return []
+
+  const data = raw.data
+  if (!data || !data.message) return []
+
+  const msg = data.message
+  const content = msg.message?.content
+
+  // Extract meaningful content from the progress event
+  const parts: string[] = []
+
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (block.type === 'text' && block.text) {
+        parts.push(block.text)
+      } else if (block.type === 'tool_use' && block.name) {
+        // Show what tool the subagent is using
+        const input = block.input || {}
+        let detail = ''
+        if (block.name === 'Read' || block.name === 'Edit' || block.name === 'Write') {
+          detail = `: ${input.file_path || input.path || ''}`
+        } else if (block.name === 'Bash') {
+          const cmd = input.command || ''
+          detail = `: ${typeof cmd === 'string' ? cmd.substring(0, 60) : ''}`
+        } else if (block.name === 'Grep' || block.name === 'Glob') {
+          detail = `: ${input.pattern || ''}`
+        }
+        parts.push(`[${block.name}${detail}]`)
+      } else if (block.type === 'tool_result' && block.content) {
+        // Tool results from user turns — skip these for progress display
+      }
+    }
+  }
+
+  if (parts.length === 0) return []
+
+  return [{
+    type: 'agent_progress',
+    toolUseId: parentToolUseId,
+    content: parts.join('\n'),
   }]
 }
 

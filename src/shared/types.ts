@@ -178,6 +178,8 @@ export interface Message {
   content: string
   toolName?: string
   toolInput?: string
+  toolId?: string
+  toolResult?: string
   toolStatus?: 'running' | 'completed' | 'error'
   timestamp: number
 }
@@ -194,10 +196,11 @@ export interface RunResult {
 
 export type NormalizedEvent =
   | { type: 'session_init'; sessionId: string; tools: string[]; model: string; mcpServers: Array<{ name: string; status: string }>; skills: string[]; version: string; isWarmup?: boolean }
-  | { type: 'text_chunk'; text: string }
-  | { type: 'tool_call'; toolName: string; toolId: string; index: number }
-  | { type: 'tool_call_update'; toolId: string; partialInput: string }
-  | { type: 'tool_call_complete'; index: number }
+  | { type: 'text_chunk'; text: string; parentToolUseId?: string | null }
+  | { type: 'tool_call'; toolName: string; toolId: string; index: number; parentToolUseId?: string | null }
+  | { type: 'tool_call_update'; toolId: string; partialInput: string; parentToolUseId?: string | null }
+  | { type: 'tool_call_complete'; index: number; parentToolUseId?: string | null }
+  | { type: 'agent_progress'; toolUseId: string; content: string }
   | { type: 'task_update'; message: AssistantMessagePayload }
   | { type: 'task_complete'; result: string; costUsd: number; durationMs: number; numTurns: number; usage: UsageData; sessionId: string; permissionDenials?: Array<{ toolName: string; toolUseId: string }> }
   | { type: 'error'; message: string; isError: boolean; sessionId?: string }
@@ -266,12 +269,15 @@ export interface SessionMeta {
   firstMessage: string | null
   lastTimestamp: string
   size: number
+  /** The original project path this session was started from */
+  projectPath?: string
 }
 
 export interface SessionLoadMessage {
   role: string
   content: string
   toolName?: string
+  toolId?: string
   timestamp: number
 }
 
@@ -320,7 +326,9 @@ export const IPC = {
   RESET_TAB_SESSION: 'clui:reset-tab-session',
   ANIMATE_HEIGHT: 'clui:animate-height',
   LIST_SESSIONS: 'clui:list-sessions',
+  LIST_ALL_SESSIONS: 'clui:list-all-sessions',
   LOAD_SESSION: 'clui:load-session',
+  GET_TOOL_RESULTS: 'clui:get-tool-results',
 
   // One-way events (main → renderer)
   TEXT_CHUNK: 'clui:text-chunk',

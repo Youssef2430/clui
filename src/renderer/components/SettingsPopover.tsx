@@ -231,6 +231,7 @@ export function SettingsPopover() {
             <div>
               <button
                 className="flex items-center gap-2 min-w-0 w-full text-left"
+                disabled={!!updateVersion && !updateReady}
                 onClick={async () => {
                   if (updateReady) {
                     window.clui.installUpdate()
@@ -245,15 +246,17 @@ export function SettingsPopover() {
               >
                 <ArrowsClockwise
                   size={14}
-                  style={{ color: updateReady ? colors.accent : colors.textTertiary }}
-                  className={checking ? 'animate-spin' : ''}
+                  style={{ color: updateVersion ? colors.accent : colors.textTertiary }}
+                  className={checking || (updateVersion && !updateReady) ? 'animate-spin' : ''}
                 />
-                <div className="text-[12px] font-medium" style={{ color: updateReady ? colors.accent : colors.textPrimary }}>
+                <div className="text-[12px] font-medium" style={{ color: updateVersion ? colors.accent : colors.textPrimary }}>
                   {updateReady
                     ? `Update to v${updateVersion}`
-                    : checking
-                      ? 'Checking…'
-                      : 'Check for updates'}
+                    : updateVersion
+                      ? `Downloading v${updateVersion}…`
+                      : checking
+                        ? 'Checking…'
+                        : 'Check for updates'}
                 </div>
               </button>
             </div>

@@ -658,6 +658,110 @@ function getToolDescription(name: string, input?: string): string {
   }
 }
 
+function ToolResultAccordion({ tool }: { tool: Message }) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const colors = useColors()
+  const hasResult = !!tool.toolResult
+  const isAgent = tool.toolName === 'Agent'
+  const isRunning = tool.toolStatus === 'running'
+
+  // Auto-scroll to bottom when content updates (streaming)
+  useEffect(() => {
+    if (open && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [open, tool.toolResult])
+
+  // On-demand fetch from JSONL if no result yet and tool is completed
+  const handleClick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (hasResult || isRunning) {
+      setOpen(!open)
+      return
+    }
+    // Try to fetch result from JSONL
+    if (!tool.toolId) { setOpen(!open); return }
+    setOpen(true)
+    setLoading(true)
+    try {
+      const tab = useSessionStore.getState().tabs.find((t) =>
+        t.messages.some((m) => m.id === tool.id)
+      )
+      if (tab?.claudeSessionId) {
+        const results = await window.clui.getToolResults(tab.claudeSessionId, tab.workingDirectory)
+        if (results[tool.toolId]) {
+          useSessionStore.setState((s) => ({
+            tabs: s.tabs.map((t) => ({
+              ...t,
+              messages: t.messages.map((m) =>
+                m.id === tool.id ? { ...m, toolResult: results[m.toolId!] || m.toolResult } : m
+              ),
+            })),
+          }))
+        }
+      }
+    } catch {}
+    setLoading(false)
+  }, [hasResult, isRunning, open, tool.toolId, tool.id])
+
+  // Show the badge text
+  const label = isRunning && isAgent ? 'Streaming...' : 'Result'
+
+  return (
+    <div className="inline-flex flex-col min-w-0" style={{ maxWidth: '100%' }}>
+      <button
+        onClick={handleClick}
+        className="inline-flex items-center gap-0.5 text-[10px] mt-0.5 px-1.5 py-[1px] rounded transition-colors"
+        style={{
+          background: tool.toolStatus === 'error' ? colors.statusErrorBg : colors.surfaceHover,
+          color: tool.toolStatus === 'error' ? colors.statusError : colors.textMuted,
+          cursor: 'pointer',
+          border: 'none',
+        }}
+      >
+        {open
+          ? <CaretDown size={8} style={{ flexShrink: 0 }} />
+          : <CaretRight size={8} style={{ flexShrink: 0 }} />
+        }
+        {label}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div
+              ref={scrollRef}
+              className="text-[11px] leading-[1.5] mt-1 px-2 py-1.5 rounded max-h-[200px] overflow-y-auto prose-cloud"
+              style={{
+                background: colors.surfacePrimary,
+                color: colors.textSecondary,
+                border: `1px solid ${colors.toolBorder}`,
+              }}
+            >
+              {loading && !hasResult && (
+                <span style={{ color: colors.textTertiary }}>Loading...</span>
+              )}
+              {hasResult && (
+                <Markdown remarkPlugins={REMARK_PLUGINS}>{tool.toolResult!}</Markdown>
+              )}
+              {!loading && !hasResult && (
+                <span style={{ color: colors.textTertiary }}>No result data available</span>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 function ToolGroup({ tools, skipMotion }: { tools: Message[]; skipMotion?: boolean }) {
   const hasRunning = tools.some((t) => t.toolStatus === 'running')
   const [expanded, setExpanded] = useState(false)
@@ -720,23 +824,15 @@ function ToolGroup({ tools, skipMotion }: { tools: Message[]; skipMotion?: boole
                       {desc}
                     </span>
 
-                    {/* Result badge */}
-                    {!isRunning && (
-                      <span
-                        className="inline-block text-[10px] mt-0.5 px-1.5 py-[1px] rounded"
-                        style={{
-                          background: tool.toolStatus === 'error' ? colors.statusErrorBg : colors.surfaceHover,
-                          color: tool.toolStatus === 'error' ? colors.statusError : colors.textMuted,
-                        }}
-                      >
-                        Result
-                      </span>
-                    )}
-
-                    {isRunning && (
+                    {/* Result accordion (shown both while running for agents, and after completion) */}
+                    {isRunning && toolName === 'Agent' ? (
+                      <ToolResultAccordion tool={tool} />
+                    ) : isRunning ? (
                       <span className="text-[10px] mt-0.5 block" style={{ color: colors.textMuted }}>
                         running...
                       </span>
+                    ) : (
+                      <ToolResultAccordion tool={tool} />
                     )}
                   </div>
                 </div>
