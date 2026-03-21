@@ -17,7 +17,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "electron-vite build --mode production && electron-builder --mac --dir",
-    "dist:dmg": "electron-vite build --mode production && electron-builder --mac dmg zip",
+    "dist:dmg": "electron-vite build --mode production && electron-builder --mac",
     "doctor": "bash scripts/doctor.sh",
     "postinstall": "electron-builder install-app-deps && bash scripts/patch-dev-icon.sh"
   },
@@ -50,6 +50,16 @@
     },
     "mac": {
       "icon": "resources/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64", "x64"]
+        }
+      ],
       "entitlements": "resources/entitlements.mac.plist",
       "entitlementsInherit": "resources/entitlements.mac.plist",
       "extendInfo": {
