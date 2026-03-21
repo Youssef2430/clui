@@ -862,7 +862,8 @@ ipcMain.handle(IPC.TRANSCRIBE_AUDIO, async (_event, audioBase64: string) => {
 
     if (!whisperBin) {
       return {
-        error: 'Whisper not found. Install with: brew install whisper-cli',
+        error: 'Whisper not found',
+        errorType: 'whisper_not_found',
         transcript: null,
       }
     }
@@ -896,7 +897,8 @@ ipcMain.handle(IPC.TRANSCRIBE_AUDIO, async (_event, audioBase64: string) => {
       // whisper-cpp: whisper-cli -m model -f file --no-timestamps
       if (!modelPath) {
         return {
-          error: 'Whisper model not found. Download with:\nmkdir -p ~/.local/share/whisper && curl -L -o ~/.local/share/whisper/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+          error: 'Whisper model not found',
+          errorType: 'model_not_found',
           transcript: null,
         }
       }
@@ -946,6 +948,86 @@ ipcMain.handle(IPC.TRANSCRIBE_AUDIO, async (_event, audioBase64: string) => {
     }
   } finally {
     try { unlinkSync(tmpWav) } catch {}
+  }
+})
+
+ipcMain.handle(IPC.FIX_WHISPER, async () => {
+  const { existsSync, mkdirSync } = require('fs')
+  const { execSync } = require('child_process')
+  const { join } = require('path')
+  const { exec } = require('child_process')
+
+  try {
+    // Check if whisper binary exists
+    const binCandidates = [
+      '/opt/homebrew/bin/whisper-cli',
+      '/usr/local/bin/whisper-cli',
+      '/opt/homebrew/bin/whisper',
+      '/usr/local/bin/whisper',
+      join(homedir(), '.local/bin/whisper'),
+    ]
+    let whisperBin = ''
+    for (const c of binCandidates) {
+      if (existsSync(c)) { whisperBin = c; break }
+    }
+    if (!whisperBin) {
+      try { whisperBin = execSync('/bin/zsh -lc "whence -p whisper-cli"', { encoding: 'utf-8' }).trim() } catch {}
+    }
+    if (!whisperBin) {
+      try { whisperBin = execSync('/bin/zsh -lc "whence -p whisper"', { encoding: 'utf-8' }).trim() } catch {}
+    }
+
+    // Install whisper-cpp via brew if missing
+    if (!whisperBin) {
+      log('FIX_WHISPER: Installing whisper-cpp via brew...')
+      await new Promise<void>((resolve, reject) => {
+        exec('/bin/zsh -lc "brew install whisper-cpp"', { timeout: 300000 }, (err: any) => {
+          if (err) reject(new Error(`brew install failed: ${err.message}`))
+          else resolve()
+        })
+      })
+      log('FIX_WHISPER: whisper-cpp installed')
+    }
+
+    // Check if model exists
+    const modelCandidates = [
+      join(homedir(), '.local/share/whisper/ggml-base.bin'),
+      join(homedir(), '.local/share/whisper/ggml-tiny.bin'),
+      '/opt/homebrew/share/whisper-cpp/models/ggml-base.bin',
+      '/opt/homebrew/share/whisper-cpp/models/ggml-tiny.bin',
+      join(homedir(), '.local/share/whisper/ggml-base.en.bin'),
+      join(homedir(), '.local/share/whisper/ggml-tiny.en.bin'),
+      '/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin',
+      '/opt/homebrew/share/whisper-cpp/models/ggml-tiny.en.bin',
+    ]
+    let modelFound = false
+    for (const m of modelCandidates) {
+      if (existsSync(m)) { modelFound = true; break }
+    }
+
+    // Download tiny model if missing
+    if (!modelFound) {
+      const modelDir = join(homedir(), '.local/share/whisper')
+      mkdirSync(modelDir, { recursive: true })
+      const modelDest = join(modelDir, 'ggml-tiny.bin')
+      log('FIX_WHISPER: Downloading ggml-tiny.bin...')
+      await new Promise<void>((resolve, reject) => {
+        exec(
+          `curl -L -o "${modelDest}" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"`,
+          { timeout: 300000 },
+          (err: any) => {
+            if (err) reject(new Error(`Model download failed: ${err.message}`))
+            else resolve()
+          }
+        )
+      })
+      log('FIX_WHISPER: Model downloaded')
+    }
+
+    return { ok: true }
+  } catch (err: any) {
+    log(`FIX_WHISPER error: ${err.message}`)
+    return { ok: false, error: err.message }
   }
 })
 

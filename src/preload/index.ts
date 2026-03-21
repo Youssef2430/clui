@@ -19,7 +19,8 @@ export interface CluiAPI {
   attachFiles(): Promise<Attachment[] | null>
   takeScreenshot(): Promise<Attachment | null>
   pasteImage(dataUrl: string): Promise<Attachment | null>
-  transcribeAudio(audioBase64: string): Promise<{ error: string | null; transcript: string | null }>
+  transcribeAudio(audioBase64: string): Promise<{ error: string | null; errorType?: string; transcript: string | null }>
+  fixWhisper(): Promise<{ ok: boolean; error?: string }>
   getDiagnostics(): Promise<any>
   respondPermission(tabId: string, questionId: string, optionId: string): Promise<boolean>
   initSession(tabId: string): void
@@ -77,6 +78,7 @@ const api: CluiAPI = {
   takeScreenshot: () => ipcRenderer.invoke(IPC.TAKE_SCREENSHOT),
   pasteImage: (dataUrl) => ipcRenderer.invoke(IPC.PASTE_IMAGE, dataUrl),
   transcribeAudio: (audioBase64) => ipcRenderer.invoke(IPC.TRANSCRIBE_AUDIO, audioBase64),
+  fixWhisper: () => ipcRenderer.invoke(IPC.FIX_WHISPER),
   getDiagnostics: () => ipcRenderer.invoke(IPC.GET_DIAGNOSTICS),
   respondPermission: (tabId, questionId, optionId) =>
     ipcRenderer.invoke(IPC.RESPOND_PERMISSION, { tabId, questionId, optionId }),

@@ -358,6 +358,9 @@ export const IPC = {
   GET_THEME: 'clui:get-theme',
   THEME_CHANGED: 'clui:theme-changed',
 
+  // Whisper setup
+  FIX_WHISPER: 'clui:fix-whisper',
+
   // Marketplace
   MARKETPLACE_FETCH: 'clui:marketplace-fetch',
   MARKETPLACE_INSTALLED: 'clui:marketplace-installed',
