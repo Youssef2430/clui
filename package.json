@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Youssef2430/claude-code-desktop.git"
+    "url": "https://github.com/Youssef2430/clui.git"
   },
   "bugs": {
-    "url": "https://github.com/Youssef2430/claude-code-desktop/issues"
+    "url": "https://github.com/Youssef2430/clui/issues"
   },
-  "homepage": "https://github.com/Youssef2430/claude-code-desktop#readme",
+  "homepage": "https://github.com/Youssef2430/clui#readme",
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -46,7 +46,7 @@
     "publish": {
       "provider": "github",
       "owner": "Youssef2430",
-      "repo": "claude-code-desktop"
+      "repo": "clui"
     },
     "mac": {
       "icon": "resources/icon.icns",
