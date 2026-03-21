@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Microphone, ArrowUp, SpinnerGap, X, Check } from '@phosphor-icons/react'
+import { Microphone, ArrowUp, SpinnerGap, X, Check, Wrench, CheckCircle } from '@phosphor-icons/react'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
 import { AttachmentChips } from './AttachmentChips'
 import { SlashCommandMenu, getFilteredCommandsWithExtras, type SlashCommand } from './SlashCommandMenu'
@@ -21,7 +21,8 @@ type VoiceState = 'idle' | 'recording' | 'transcribing'
 export function InputBar() {
   const [input, setInput] = useState('')
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
-  const [voiceError, setVoiceError] = useState<string | null>(null)
+  const [voiceError, setVoiceError] = useState<{ message: string; fixable: boolean } | null>(null)
+  const [fixingWhisper, setFixingWhisper] = useState<'idle' | 'fixing' | 'done'>('idle')
   const [slashFilter, setSlashFilter] = useState<string | null>(null)
   const [slashIndex, setSlashIndex] = useState(0)
   const [isMultiLine, setIsMultiLine] = useState(false)
@@ -337,12 +338,13 @@ export function InputBar() {
 
   const startRecording = useCallback(async () => {
     setVoiceError(null)
+    setFixingWhisper('idle')
     chunksRef.current = []
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch {
-      setVoiceError('Microphone permission denied.')
+      setVoiceError({ message: 'Microphone permission denied.', fixable: false })
       return
     }
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
@@ -357,12 +359,15 @@ export function InputBar() {
         const blob = new Blob(chunksRef.current, { type: mimeType })
         const wavBase64 = await blobToWavBase64(blob)
         const result = await window.clui.transcribeAudio(wavBase64)
-        if (result.error) setVoiceError(result.error)
+        if (result.error) {
+          const fixable = result.errorType === 'whisper_not_found' || result.errorType === 'model_not_found'
+          setVoiceError({ message: result.error, fixable })
+        }
         else if (result.transcript) setInput((prev) => (prev ? `${prev} ${result.transcript}` : result.transcript!))
-      } catch (err: any) { setVoiceError(`Voice failed: ${err.message}`) }
+      } catch (err: any) { setVoiceError({ message: `Voice failed: ${err.message}`, fixable: false }) }
       finally { setVoiceState('idle') }
     }
-    recorder.onerror = () => { stream.getTracks().forEach((t) => t.stop()); setVoiceError('Recording failed.'); setVoiceState('idle') }
+    recorder.onerror = () => { stream.getTracks().forEach((t) => t.stop()); setVoiceError({ message: 'Recording failed.', fixable: false }); setVoiceState('idle') }
     mediaRecorderRef.current = recorder
     setVoiceState('recording')
     recorder.start()
@@ -520,8 +525,40 @@ export function InputBar() {
 
       {/* Voice error */}
       {voiceError && (
-        <div className="px-1 pb-2 text-[11px]" style={{ color: colors.statusError }}>
-          {voiceError}
+        <div className="px-1 pb-2 text-[11px] flex items-center gap-2" style={{ color: colors.statusError }}>
+          <span>{voiceError.message}</span>
+          {voiceError.fixable && fixingWhisper === 'idle' && (
+            <button
+              onClick={async () => {
+                setFixingWhisper('fixing')
+                const result = await window.clui.fixWhisper()
+                if (result.ok) {
+                  setFixingWhisper('done')
+                  setTimeout(() => { setVoiceError(null); setFixingWhisper('idle') }, 1500)
+                } else {
+                  setVoiceError({ message: result.error || 'Installation failed', fixable: false })
+                  setFixingWhisper('idle')
+                }
+              }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors whitespace-nowrap"
+              style={{ background: colors.accent, color: colors.textOnAccent }}
+            >
+              <Wrench size={11} />
+              Fix it for me
+            </button>
+          )}
+          {fixingWhisper === 'fixing' && (
+            <span className="flex items-center gap-1 whitespace-nowrap" style={{ color: colors.textSecondary }}>
+              <SpinnerGap size={11} className="animate-spin" />
+              Installing...
+            </span>
+          )}
+          {fixingWhisper === 'done' && (
+            <span className="flex items-center gap-1 whitespace-nowrap" style={{ color: colors.statusComplete }}>
+              <CheckCircle size={11} weight="fill" />
+              Ready
+            </span>
+          )}
         </div>
       )}
     </div>
