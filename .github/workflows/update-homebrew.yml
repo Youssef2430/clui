@@ -1,0 +1,74 @@
+name: Update Homebrew Tap
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-cask:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release DMGs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.dmg" \
+            --dir artifacts
+
+      - name: Calculate SHA256 hashes
+        id: sha
+        run: |
+          arm64_sha=$(shasum -a 256 artifacts/*-arm64.dmg | awk '{print $1}')
+          intel_sha=$(shasum -a 256 artifacts/Clui-${{ steps.version.outputs.version }}.dmg | awk '{print $1}')
+          echo "arm64=${arm64_sha}" >> "$GITHUB_OUTPUT"
+          echo "intel=${intel_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-clui
+        uses: actions/checkout@v4
+        with:
+          repository: Youssef2430/homebrew-clui
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update cask
+        run: |
+          cat > Casks/clui.rb << 'CASK'
+          cask "clui" do
+            arch arm: "arm64", intel: ""
+            folder = on_arch_conditional arm: "-arm64", intel: ""
+
+            version "${{ steps.version.outputs.version }}"
+            sha256 arm:   "${{ steps.sha.outputs.arm64 }}",
+                   intel: "${{ steps.sha.outputs.intel }}"
+
+            url "https://github.com/Youssef2430/clui/releases/download/v#{version}/Clui-#{version}#{folder}.dmg"
+            name "Clui"
+            desc "Desktop UI for Claude Code"
+            homepage "https://github.com/Youssef2430/clui"
+
+            depends_on macos: ">= :ventura"
+
+            app "Clui.app"
+
+            zap trash: [
+              "~/Library/Application Support/Clui",
+              "~/Library/Preferences/com.clui.app.plist",
+              "~/Library/Caches/com.clui.app",
+            ]
+          end
+          CASK
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' Casks/clui.rb
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/clui.rb
+          git commit -m "update clui to ${{ steps.version.outputs.version }}"
+          git push
