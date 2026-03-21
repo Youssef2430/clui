@@ -67,8 +67,8 @@ if [ -n "$remaining" ]; then
   echo "    kill -9 $remaining"
 else
   if [ "$stopped" -eq 1 ]; then
-    echo "DesktopCC stopped."
+    echo "Clui stopped."
   else
-    echo "DesktopCC was not running."
+    echo "Clui was not running."
   fi
 fi

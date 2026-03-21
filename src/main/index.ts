@@ -667,7 +667,7 @@ ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
   if (!mainWindow) return null
   // macOS: activate app so unparented dialog appears on top (not behind other apps).
   // Unparented avoids modal dimming on the transparent overlay.
-  // Activation is fine here — user is actively interacting with DesktopCC.
+  // Activation is fine here — user is actively interacting with Clui.
   if (process.platform === 'darwin') app.focus()
   const options = { properties: ['openDirectory'] as const }
   const result = process.platform === 'darwin'
@@ -1131,7 +1131,7 @@ app.whenReady().then(async () => {
   const trayIcon = nativeImage.createFromPath(trayIconPath)
   trayIcon.setTemplateImage(true)
   tray = new Tray(trayIcon)
-  tray.setToolTip('DesktopCC — Claude Code UI')
+  tray.setToolTip('Clui — Claude Code UI')
   tray.on('click', () => toggleWindow('tray click'))
 
   let pendingUpdateVersion: string | null = null
@@ -1139,7 +1139,7 @@ app.whenReady().then(async () => {
   function rebuildTrayMenu(): void {
     if (!tray) return
     const items: Electron.MenuItemConstructorOptions[] = [
-      { label: 'Show DesktopCC', click: () => showWindow('tray menu') },
+      { label: 'Show Clui', click: () => showWindow('tray menu') },
     ]
     if (pendingUpdateVersion) {
       items.push({

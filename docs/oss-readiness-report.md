@@ -1,4 +1,4 @@
-# DesktopCC Open-Source Readiness Report
+# Clui Open-Source Readiness Report
 
 **Date:** 2026-03-12
 **Branch:** `oss-prep`

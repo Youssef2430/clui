@@ -1,9 +1,9 @@
 /**
- * Skill manifest — defines which skills DesktopCC auto-installs into ~/.claude/skills/.
+ * Skill manifest — defines which skills Clui auto-installs into ~/.claude/skills/.
  *
  * Two source types:
  *   - github: downloaded from a pinned commit SHA (deterministic, not branch tip)
- *   - bundled: copied from DesktopCC's own resources (for skills we author ourselves)
+ *   - bundled: copied from Clui's own resources (for skills we author ourselves)
  *
  * To add a new skill, append an entry here. The installer handles the rest.
  */

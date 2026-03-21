@@ -1,8 +1,8 @@
-# DesktopCC Architecture
+# Clui Architecture
 
 ## Overview
 
-DesktopCC is an Electron desktop application that provides a graphical interface for Claude Code CLI. It spawns `claude -p` subprocesses, parses their NDJSON output, and presents conversations in a floating overlay window.
+Clui is an Electron desktop application that provides a graphical interface for Claude Code CLI. It spawns `claude -p` subprocesses, parses their NDJSON output, and presents conversations in a floating overlay window.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -112,7 +112,7 @@ Uses Electron's `net.request()` with a 5-minute TTL cache. Individual fetch fail
 
 ### Skill Installer (`skills/installer.ts`)
 
-Auto-installs bundled skills on startup (currently: `skill-creator`). Uses pinned commit SHAs for deterministic downloads. Atomic install: validates in temp dir before swapping into `~/.claude/skills/`. Respects user-managed skills (skips if no `.clui-version` marker). Managed by DesktopCC's skill installer.
+Auto-installs bundled skills on startup (currently: `skill-creator`). Uses pinned commit SHAs for deterministic downloads. Atomic install: validates in temp dir before swapping into `~/.claude/skills/`. Respects user-managed skills (skips if no `.clui-version` marker). Managed by Clui's skill installer.
 
 ## Preload (`src/preload/`)
 

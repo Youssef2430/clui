@@ -69,7 +69,7 @@ export function useClaudeEvents() {
 
     const unsubSkill = window.clui.onSkillStatus((status) => {
       if (status.state === 'failed') {
-        console.warn(`[DesktopCC] Skill install failed: ${status.name} — ${status.error}`)
+        console.warn(`[Clui] Skill install failed: ${status.name} — ${status.error}`)
       }
     })
 

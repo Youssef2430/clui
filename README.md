@@ -1,6 +1,6 @@
-# DesktopCC — Command Line User Interface for Claude Code
+# Clui — Command Line User Interface for Claude Code
 
-A lightweight, transparent desktop overlay for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) on macOS. DesktopCC wraps the Claude Code CLI in a floating pill interface with multi-tab sessions, a permission approval UI, voice input, and a skills marketplace.
+A lightweight, transparent desktop overlay for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) on macOS. Clui wraps the Claude Code CLI in a floating pill interface with multi-tab sessions, a permission approval UI, voice input, and a skills marketplace.
 
 ## Demo
 
@@ -14,12 +14,12 @@ A lightweight, transparent desktop overlay for [Claude Code](https://docs.anthro
 - **Multi-tab sessions** — each tab spawns its own `claude -p` process with independent session state.
 - **Permission approval UI** — intercepts tool calls via PreToolUse HTTP hooks so you can review and approve/deny from the UI.
 - **Conversation history** — browse and resume past Claude Code sessions.
-- **Skills marketplace** — install plugins from Anthropic's GitHub repos without leaving DesktopCC.
+- **Skills marketplace** — install plugins from Anthropic's GitHub repos without leaving Clui.
 - **Voice input** — local speech-to-text via Whisper (required, installed automatically).
 - **File & screenshot attachments** — paste images or attach files directly.
 - **Dual theme** — dark/light mode with system-follow option.
 
-## Why DesktopCC
+## Why Clui
 
 - **Claude Code, but visual** — keep CLI power while getting a fast desktop UX for approvals, history, and multitasking.
 - **Human-in-the-loop safety** — tool calls are reviewed and approved in-app before execution.
@@ -37,7 +37,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full deep-dive.
 
 ## Install App (Recommended)
 
-The fastest way to get DesktopCC running as a regular Mac app. This installs dependencies, voice support (Whisper), builds the app, copies it to `/Applications`, and launches it.
+The fastest way to get Clui running as a regular Mac app. This installs dependencies, voice support (Whisper), builds the app, copies it to `/Applications`, and launches it.
 
 **1) Clone the repo**
 
@@ -52,9 +52,9 @@ Open the `clui-cc` folder in Finder and double-click `install-app.command`.
 > **First launch:** macOS may block the app because it's unsigned. Go to **System Settings → Privacy & Security → Open Anyway**. You only need to do this once.
 > **Folder cleanup:** the installer removes temporary `dist/` and `release/` folders after a successful install to keep the repo tidy.
 
-<p align="center"><img src="docs/shortcut.png" width="520" alt="Press Option + Space to show or hide DesktopCC" /></p>
+<p align="center"><img src="docs/shortcut.png" width="520" alt="Press Option + Space to show or hide Clui" /></p>
 
-After the initial install, just open **DesktopCC** from your Applications folder or Spotlight.
+After the initial install, just open **Clui** from your Applications folder or Spotlight.
 
 <details>
 <summary><strong>Terminal / Developer Commands</strong></summary>
@@ -105,7 +105,7 @@ Renderer changes update instantly. Main-process changes require restarting `npm 
 |---------|---------|
 | `./commands/setup.command` | Environment check + install dependencies |
 | `./commands/start.command` | Build and launch from source |
-| `./commands/stop.command` | Stop all DesktopCC processes |
+| `./commands/stop.command` | Stop all Clui processes |
 | `npm run build` | Production build (no packaging) |
 | `npm run dist` | Package as macOS `.app` into `release/` |
 | `npm run doctor` | Run environment diagnostic |
@@ -159,7 +159,7 @@ claude
 brew install whisper-cli
 ```
 
-> **No API keys or `.env` file required.** DesktopCC uses your existing Claude Code CLI authentication (Pro/Team/Enterprise subscription).
+> **No API keys or `.env` file required.** Clui uses your existing Claude Code CLI authentication (Pro/Team/Enterprise subscription).
 
 </details>
 
@@ -196,7 +196,7 @@ src/
 
 ### Network Behavior
 
-DesktopCC operates almost entirely offline. The only outbound network calls are:
+Clui operates almost entirely offline. The only outbound network calls are:
 
 | Endpoint | Purpose | Required |
 |----------|---------|----------|
@@ -230,7 +230,7 @@ npm run doctor
 ## Known Limitations
 
 - **macOS only** — transparent overlay, tray icon, and node-pty are macOS-specific. Windows/Linux support is not currently implemented.
-- **Requires Claude Code CLI** — DesktopCC is a UI layer, not a standalone AI client. You need an authenticated `claude` CLI.
+- **Requires Claude Code CLI** — Clui is a UI layer, not a standalone AI client. You need an authenticated `claude` CLI.
 - **Permission mode** — uses `--permission-mode default`. The PTY interactive transport is legacy and disabled by default.
 
 ## License

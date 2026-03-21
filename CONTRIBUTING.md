@@ -1,6 +1,6 @@
-# Contributing to DesktopCC
+# Contributing to Clui
 
-Thanks for your interest in contributing! DesktopCC is a desktop overlay for Claude Code, and we welcome bug reports, feature ideas, and pull requests.
+Thanks for your interest in contributing! Clui is a desktop overlay for Claude Code, and we welcome bug reports, feature ideas, and pull requests.
 
 ## Getting Started
 

@@ -110,7 +110,7 @@ async function installGithubSkill(
       throw new Error(`Validation failed: ${err}`)
     }
 
-    // Atomic swap: remove old (if DesktopCC-managed), rename tmp into place
+    // Atomic swap: remove old (if Clui-managed), rename tmp into place
     if (existsSync(targetDir)) {
       const existing = readVersionFile(targetDir)
       if (existing?.installedBy === 'clui') {

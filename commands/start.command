@@ -25,14 +25,14 @@ if [ -f "$PID_FILE" ]; then
   fi
 fi
 
-echo "Building DesktopCC..."
+echo "Building Clui..."
 if ! npx electron-vite build --mode production; then
   echo
   echo "Build failed. Try: rm -rf node_modules && npm install"
   exit 1
 fi
 
-echo "DesktopCC running. ⌥ + Space to toggle. Use ./commands/stop.command or tray icon > Quit to close."
+echo "Clui running. ⌥ + Space to toggle. Use ./commands/stop.command or tray icon > Quit to close."
 
 # Launch in a new process group and record the PID
 npx electron . &

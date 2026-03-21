@@ -1,5 +1,5 @@
 /**
- * DesktopCC Design Tokens — Dual theme (dark + light)
+ * Clui Design Tokens — Dual theme (dark + light)
  * Colors derived from ChatCN oklch system and design-fixed.html reference.
  */
 import { create } from 'zustand'

@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in DesktopCC, please report it responsibly:
+If you discover a security vulnerability in Clui, please report it responsibly:
 
 1. **Do not** open a public GitHub issue.
 2. Email the maintainer directly or use GitHub's private vulnerability reporting feature.
@@ -12,7 +12,7 @@ We will acknowledge receipt within 48 hours and aim to provide a fix or mitigati
 
 ## Security Architecture
 
-DesktopCC runs entirely on your local machine. Key security properties:
+Clui runs entirely on your local machine. Key security properties:
 
 - **No cloud backend** — all Claude Code interaction goes through the local `claude` CLI.
 - **No telemetry or analytics** — zero outbound data collection.
@@ -30,7 +30,7 @@ DesktopCC runs entirely on your local machine. Key security properties:
 | `raw.githubusercontent.com` | Outbound | Marketplace catalog fetch (optional) |
 | `api.github.com` | Outbound | Skill tarball download (optional, pinned SHA) |
 
-No other network connections are made by DesktopCC itself. The `claude` CLI may make its own connections as part of normal operation.
+No other network connections are made by Clui itself. The `claude` CLI may make its own connections as part of normal operation.
 
 ## Supported Versions
 

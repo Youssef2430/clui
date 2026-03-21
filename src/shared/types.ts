@@ -220,7 +220,7 @@ export interface RunOptions {
   maxBudgetUsd?: number
   systemPrompt?: string
   model?: string
-  /** Path to DesktopCC-scoped settings file with hook config (passed via --settings) */
+  /** Path to Clui-scoped settings file with hook config (passed via --settings) */
   hookSettingsPath?: string
   /** Extra directories to add via --add-dir (session-preserving) */
   addDirs?: string[]

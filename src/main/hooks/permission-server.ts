@@ -6,7 +6,7 @@
  * The server forwards it to the renderer (PermissionCard), waits for the
  * user's decision, and returns the structured hook response.
  *
- * This is a DesktopCC-owned permission broker that approximates Claude Code's
+ * This is a Clui-owned permission broker that approximates Claude Code's
  * practical permission cadence. It does not reproduce native permission
  * semantics exactly — it intercepts the small set of tool classes that
  * map to real, user-meaningful approval moments.
@@ -15,7 +15,7 @@
  *   - Per-launch app secret in URL path (prevents local spoofing)
  *   - Per-run token in URL path (prevents cross-run confusion)
  *   - Deny-by-default on every failure path
- *   - Per-run settings files (only DesktopCC-spawned sessions see the hook)
+ *   - Per-run settings files (only Clui-spawned sessions see the hook)
  */
 
 import { createServer, IncomingMessage, ServerResponse } from 'http'
