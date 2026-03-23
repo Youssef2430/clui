@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import {
-  Trash, Cpu, CurrencyDollar, Question, HardDrives, Sparkle,
+  Trash, Cpu, CurrencyDollar, Question, HardDrives, Sparkle, Info,
 } from '@phosphor-icons/react'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
@@ -19,6 +19,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/model', description: 'Show current model info', icon: <Cpu size={13} /> },
   { command: '/mcp', description: 'Show MCP server status', icon: <HardDrives size={13} /> },
   { command: '/skills', description: 'Show available skills', icon: <Sparkle size={13} /> },
+  { command: '/context', description: 'Show context window usage', icon: <Info size={13} /> },
   { command: '/help', description: 'Show available commands', icon: <Question size={13} /> },
 ]
 

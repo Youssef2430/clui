@@ -168,11 +168,17 @@ export function InputBar() {
       case '/cost': {
         if (tab?.lastResult) {
           const r = tab.lastResult
-          const parts = [`$${r.totalCostUsd.toFixed(4)}`, `${(r.durationMs / 1000).toFixed(1)}s`, `${r.numTurns} turn${r.numTurns !== 1 ? 's' : ''}`]
-          if (r.usage.input_tokens) {
-            parts.push(`${r.usage.input_tokens.toLocaleString()} in / ${(r.usage.output_tokens || 0).toLocaleString()} out`)
-          }
-          addSystemMessage(parts.join(' · '))
+          const costData = JSON.stringify({
+            cost: r.totalCostUsd,
+            durationMs: r.durationMs,
+            turns: r.numTurns,
+            inputTokens: r.usage.input_tokens || 0,
+            outputTokens: r.usage.output_tokens || 0,
+            cacheRead: r.usage.cache_read_input_tokens || 0,
+            cacheCreate: r.usage.cache_creation_input_tokens || 0,
+            model: tab.sessionModel,
+          })
+          addSystemMessage(`__COST_DATA__${costData}`)
         } else {
           addSystemMessage('No cost data yet — send a message first.')
         }
@@ -215,9 +221,65 @@ export function InputBar() {
         }
         break
       }
+      case '/context': {
+        if (!tab?.claudeSessionId) {
+          addSystemMessage('No session active yet — send a message first.')
+          break
+        }
+
+        addSystemMessage('__CONTEXT_LOADING__')
+
+        // Pass the tab's in-memory session data (which has real API usage)
+        // to the main process, which reads memory/skill files from disk
+        const sessionData = {
+          sessionId: tab.claudeSessionId,
+          projectPath: tab.workingDirectory,
+          model: tab.sessionModel,
+          tools: tab.sessionTools,
+          skills: tab.sessionSkills,
+          mcpServers: tab.sessionMcpServers,
+          version: tab.sessionVersion,
+          usage: tab.lastResult?.usage || null,
+          messageCount: tab.messages.filter((m) => m.role === 'user' || m.role === 'assistant').length,
+          messageChars: tab.messages
+            .filter((m) => m.role === 'user' || m.role === 'assistant')
+            .reduce((sum, m) => sum + m.content.length, 0),
+        }
+
+        window.clui.getContext(tab.claudeSessionId, tab.workingDirectory, sessionData).then((data) => {
+          // Remove the loading message
+          const { activeTabId: tid } = useSessionStore.getState()
+          useSessionStore.setState((s) => ({
+            tabs: s.tabs.map((t) => {
+              if (t.id !== tid) return t
+              const msgs = t.messages.filter((m) => m.content !== '__CONTEXT_LOADING__')
+              return { ...t, messages: msgs }
+            }),
+          }))
+
+          if (data && data.categories && data.categories.length > 0) {
+            addSystemMessage(`__CONTEXT_DATA__${JSON.stringify(data)}`)
+          } else {
+            console.warn('/context: no data returned', data)
+            addSystemMessage('Could not retrieve context data. Make sure the Claude CLI is installed and the session is active.')
+          }
+        }).catch(() => {
+          const { activeTabId: tid } = useSessionStore.getState()
+          useSessionStore.setState((s) => ({
+            tabs: s.tabs.map((t) => {
+              if (t.id !== tid) return t
+              const msgs = t.messages.filter((m) => m.content !== '__CONTEXT_LOADING__')
+              return { ...t, messages: msgs }
+            }),
+          }))
+          addSystemMessage('Error: Failed to get context data.')
+        })
+        break
+      }
       case '/help': {
         const lines = [
           '/clear — Clear conversation history',
+          '/context — Show context window usage',
           '/cost — Show token usage and cost',
           '/model — Show model info & switch models',
           '/mcp — Show MCP server status',

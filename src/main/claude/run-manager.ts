@@ -93,11 +93,20 @@ export class RunManager extends EventEmitter {
   /** Holds recently-finished runs so diagnostics survive past process exit */
   private _finishedRuns = new Map<string, RunHandle>()
   private claudeBinary: string
+  /** Cached env snapshot — avoids EPIPE-prone re-discovery on each call */
+  private _cachedEnv: NodeJS.ProcessEnv | null = null
 
   constructor() {
     super()
     this.claudeBinary = this._findClaudeBinary()
     log(`Claude binary: ${this.claudeBinary}`)
+    // Eagerly cache the env so later calls never trigger execSync
+    try { this._cachedEnv = this._getEnv() } catch {}
+  }
+
+  /** Expose resolved binary path and env for one-off CLI calls */
+  getClaudeInfo(): { binary: string; env: NodeJS.ProcessEnv } {
+    return { binary: this.claudeBinary, env: this._cachedEnv || { ...process.env } }
   }
 
   private _findClaudeBinary(): string {

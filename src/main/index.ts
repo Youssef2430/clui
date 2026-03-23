@@ -663,6 +663,266 @@ ipcMain.handle(IPC.GET_TOOL_RESULTS, async (_e, arg: { sessionId: string; projec
   }
 })
 
+// ─── Get context window usage by reading real session data from disk ───
+// Replicates the CLI's E01() calculator: reads the session JSONL for init/result
+// events, reads memory/CLAUDE.md files from disk, estimates tokens via charLength/4
+// (same fallback the CLI uses when the countTokens API is unavailable).
+
+ipcMain.handle(IPC.GET_CONTEXT, async (_e, arg: { sessionId: string; projectPath: string; sessionData?: any }) => {
+  const { sessionId, projectPath, sessionData } = arg
+  log(`IPC GET_CONTEXT session=${sessionId} path=${projectPath}`)
+
+  try {
+    const { readFileSync } = require('fs')
+    const cwd = projectPath === '~' ? homedir() : projectPath
+    const encodedPath = encodeProjectPath(cwd)
+    const projectDir = join(homedir(), '.claude', 'projects', encodedPath)
+
+    // ── 1. Session metadata: prefer in-memory data, fall back to JSONL ──
+    let model: string | null = sessionData?.model || null
+    let tools: string[] = sessionData?.tools || []
+    let skills: string[] = sessionData?.skills || []
+    let mcpServers: Array<{ name: string; status: string }> = sessionData?.mcpServers || []
+    const version: string | null = sessionData?.version || null
+    const usage = sessionData?.usage || {}
+
+    let lastInputTokens = usage.input_tokens || 0
+    let lastOutputTokens = usage.output_tokens || 0
+    let cacheRead = usage.cache_read_input_tokens || 0
+    let cacheCreate = usage.cache_creation_input_tokens || 0
+
+    let messageChars = sessionData?.messageChars || 0
+
+    // If we don't have API usage data (e.g. resumed CLI session without a new message),
+    // read the session JSONL to estimate message sizes from actual content
+    const hasApiUsage = cacheCreate > 0 || cacheRead > 0 || lastInputTokens > 0
+    if (!hasApiUsage) {
+      const jsonlPath = join(projectDir, `${sessionId}.jsonl`)
+      if (existsSync(jsonlPath)) {
+        log('GET_CONTEXT: no API usage, falling back to JSONL message content')
+        await new Promise<void>((resolve) => {
+          const rl = createInterface({ input: createReadStream(jsonlPath) })
+          rl.on('line', (line: string) => {
+            try {
+              const obj = JSON.parse(line)
+              // Count message content chars
+              if (obj.type === 'user' || obj.type === 'assistant') {
+                const content = obj.message?.content
+                if (typeof content === 'string') {
+                  messageChars += content.length
+                } else if (Array.isArray(content)) {
+                  for (const block of content) {
+                    if (block.type === 'text' && block.text) messageChars += block.text.length
+                    if (block.type === 'tool_use' && block.input) messageChars += JSON.stringify(block.input).length
+                    if (block.type === 'tool_result') {
+                      const c = block.content
+                      if (typeof c === 'string') messageChars += c.length
+                      else if (Array.isArray(c)) {
+                        for (const b of c) { if (b.type === 'text' && b.text) messageChars += b.text.length }
+                      }
+                    }
+                  }
+                }
+              }
+            } catch {}
+          })
+          rl.on('close', () => resolve())
+        })
+      }
+    }
+
+    // Separate MCP tools from built-in tools
+    const mcpServerCount = mcpServers.filter((s: any) => s.status === 'connected').length
+    const totalToolCount = tools.length
+    const mcpToolCount = mcpServerCount > 0 ? Math.max(0, totalToolCount - 25) : 0
+    const toolCount = totalToolCount - mcpToolCount
+
+    // ── 2. Read CLAUDE.md / memory files from disk (real content sizes) ──
+    const memoryFiles: Array<{ path: string; tokens: number }> = []
+    let totalMemoryChars = 0
+
+    // Project-level CLAUDE.md
+    const claudeMdPaths = [
+      join(cwd, 'CLAUDE.md'),
+      join(cwd, '.claude', 'CLAUDE.md'),
+    ]
+    for (const p of claudeMdPaths) {
+      if (existsSync(p)) {
+        try {
+          const content = readFileSync(p, 'utf-8')
+          const tokens = Math.ceil(content.length / 4)
+          totalMemoryChars += content.length
+          memoryFiles.push({ path: p.replace(homedir(), '~'), tokens })
+        } catch {}
+      }
+    }
+
+    // User-level CLAUDE.md
+    const userClaudeMd = join(homedir(), '.claude', 'CLAUDE.md')
+    if (existsSync(userClaudeMd)) {
+      try {
+        const content = readFileSync(userClaudeMd, 'utf-8')
+        const tokens = Math.ceil(content.length / 4)
+        totalMemoryChars += content.length
+        memoryFiles.push({ path: '~/.claude/CLAUDE.md', tokens })
+      } catch {}
+    }
+
+    // Project memory directory (auto-memory files)
+    const memoryDir = join(projectDir, 'memory')
+    if (existsSync(memoryDir)) {
+      try {
+        const files = readdirSync(memoryDir).filter((f: string) => f.endsWith('.md'))
+        for (const file of files) {
+          const filePath = join(memoryDir, file)
+          try {
+            const content = readFileSync(filePath, 'utf-8')
+            const tokens = Math.ceil(content.length / 4)
+            totalMemoryChars += content.length
+            memoryFiles.push({ path: join('memory', file), tokens })
+          } catch {}
+        }
+      } catch {}
+    }
+
+    // ── 3. Read skill content from disk for real token counts ──
+    const skillDetails: Array<{ name: string; tokens: number }> = []
+    let totalSkillChars = 0
+
+    // Skills live in ~/.claude/skills/<name>/SKILL.md or similar
+    const skillsDir = join(homedir(), '.claude', 'skills')
+    if (existsSync(skillsDir) && skills.length > 0) {
+      try {
+        const skillDirs = readdirSync(skillsDir)
+        for (const skillDir of skillDirs) {
+          const skillMd = join(skillsDir, skillDir, 'SKILL.md')
+          if (existsSync(skillMd)) {
+            try {
+              const content = readFileSync(skillMd, 'utf-8')
+              // CLI counts [name, desc, whenToUse].join(" ") / 4 for frontmatter
+              const tokens = Math.ceil(content.length / 4)
+              totalSkillChars += content.length
+              skillDetails.push({ name: skillDir, tokens })
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+    // If we found skills from the init event but couldn't read them from disk,
+    // estimate using the CLI's gP6() approach: charLen/4 on the name
+    for (const s of skills) {
+      if (!skillDetails.some((sd) => sd.name === s)) {
+        const estimated = Math.max(40, Math.ceil(s.length * 20 / 4)) // name + desc rough estimate
+        totalSkillChars += estimated * 4
+        skillDetails.push({ name: s, tokens: estimated })
+      }
+    }
+
+    // ── 4. Use REAL API token counts from the result event ──
+    //
+    // From the API result event we get:
+    //   cache_creation_input_tokens = system context (prompt + tools + memory + skills)
+    //                                 cached on first request
+    //   cache_read_input_tokens     = same system context, read from cache on subsequent requests
+    //   input_tokens                = per-request tokens (messages + new content)
+    //
+    // The real infrastructure token count = cache_creation OR cache_read (whichever is nonzero)
+    // The real message token count = input_tokens
+    // Total context = all three combined
+
+    // Context window size — infer from model name (CLI: aX())
+    const isExtended = model?.includes('[1m]') || model?.includes('opus-4') || model?.includes('sonnet-4')
+    const maxTokens = isExtended ? 1000000 : 200000
+
+    // Memory file tokens (from actual file content, char/4)
+    const memoryTokens = Math.ceil(totalMemoryChars / 4)
+
+    // Skill tokens (from actual file content, char/4)
+    const skillTokens = Math.ceil(totalSkillChars / 4)
+
+    // Autocompact buffer: CLI uses min(maxOutput, 20000) + 13000 = 33000
+    const autocompactBuffer = 33000
+
+    let systemPromptTokens: number
+    let builtInToolTokens: number
+    let mcpToolTokens: number
+    let msgTokens: number
+    let totalUsed: number
+
+    if (hasApiUsage) {
+      // ── Path A: Real API token counts available ──
+      const infraTokens = Math.max(cacheCreate, cacheRead)
+      msgTokens = lastInputTokens
+      totalUsed = infraTokens + msgTokens
+
+      // Derive system prompt + tools from infrastructure minus known categories
+      const systemAndToolTokens = Math.max(0, infraTokens - memoryTokens - skillTokens)
+
+      // Split system prompt vs tools proportionally
+      const estSys = 5500
+      const estTools = toolCount * 250 + mcpToolCount * 200
+      const total = estSys + estTools || 1
+      systemPromptTokens = Math.round(systemAndToolTokens * (estSys / total))
+      builtInToolTokens = Math.round(systemAndToolTokens * (Math.max(0, estTools - mcpToolCount * 200) / total))
+      mcpToolTokens = mcpToolCount > 0 ? Math.round(systemAndToolTokens * (mcpToolCount * 200 / total)) : 0
+
+      log(`GET_CONTEXT: [API] infra=${infraTokens} (cache_create=${cacheCreate}, cache_read=${cacheRead}), msgs=${msgTokens}`)
+    } else {
+      // ── Path B: No API data — estimate from content sizes (CLI's char/4 fallback) ──
+      systemPromptTokens = 5500
+      builtInToolTokens = toolCount * 250
+      mcpToolTokens = mcpToolCount * 200
+      msgTokens = Math.ceil(messageChars / 4)
+      totalUsed = systemPromptTokens + builtInToolTokens + mcpToolTokens + memoryTokens + skillTokens + msgTokens
+
+      log(`GET_CONTEXT: [estimated] sysProm=${systemPromptTokens}, tools=${builtInToolTokens}, msgs=${msgTokens} (${messageChars} chars)`)
+    }
+
+    // Free space
+    const freeTokens = Math.max(0, maxTokens - totalUsed - autocompactBuffer)
+    const usagePercent = maxTokens > 0 ? Math.round((totalUsed / maxTokens) * 100) : 0
+
+    // ── 5. Build category array ──
+    const pct = (t: number) => maxTokens > 0 ? (t / maxTokens) * 100 : 0
+
+    const categories = [
+      { label: 'System prompt', tokens: systemPromptTokens, percent: pct(systemPromptTokens) },
+      { label: 'System tools', tokens: builtInToolTokens, percent: pct(builtInToolTokens) },
+    ]
+    if (mcpToolTokens > 0) {
+      categories.push({ label: 'MCP tools', tokens: mcpToolTokens, percent: pct(mcpToolTokens) })
+    }
+    categories.push(
+      { label: 'Memory files', tokens: memoryTokens, percent: pct(memoryTokens) },
+      { label: 'Skills', tokens: skillTokens, percent: pct(skillTokens) },
+      { label: 'Messages', tokens: msgTokens, percent: pct(msgTokens) },
+      { label: 'Free space', tokens: freeTokens, percent: pct(freeTokens) },
+      { label: 'Autocompact buffer', tokens: autocompactBuffer, percent: pct(autocompactBuffer) },
+    )
+
+    log(`GET_CONTEXT: model=${model}, total=${totalUsed}/${maxTokens} (${usagePercent}%), source=${hasApiUsage ? 'API' : 'estimated'}`)
+
+    return {
+      model,
+      maxTokens,
+      usagePercent,
+      totalUsed,
+      categories,
+      memoryFiles,
+      skills: skillDetails,
+      inputTokens: lastInputTokens,
+      outputTokens: lastOutputTokens,
+      cacheRead,
+      cacheCreate,
+      version,
+      isEstimated: !hasApiUsage,
+    }
+  } catch (err) {
+    log(`GET_CONTEXT error: ${err}`)
+    return null
+  }
+})
+
 ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
   if (!mainWindow) return null
   // macOS: activate app so unparented dialog appears on top (not behind other apps).

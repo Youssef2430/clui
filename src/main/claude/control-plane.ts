@@ -727,6 +727,12 @@ export class ControlPlane extends EventEmitter {
     return this.runManager.writeToStdin(tab.activeRequestId, msg)
   }
 
+  // ─── Claude CLI info (for one-off commands) ───
+
+  getClaudeInfo(): { binary: string; env: NodeJS.ProcessEnv } {
+    return this.runManager.getClaudeInfo()
+  }
+
   // ─── Health ───
 
   getHealth(): HealthReport {

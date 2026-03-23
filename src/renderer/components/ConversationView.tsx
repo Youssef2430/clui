@@ -6,6 +6,8 @@ import {
   FileText, PencilSimple, FileArrowUp, Terminal, MagnifyingGlass, Globe,
   Robot, Question, Wrench, FolderOpen, Copy, Check, CaretRight, CaretDown,
   SpinnerGap, ArrowCounterClockwise, Square,
+  Brain, Lightning, ChatDots, HardDrives, Plugs, Archive, CircleDashed, Cpu,
+  CurrencyDollar, Clock, ArrowsClockwise, CoinVertical,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { PermissionCard } from './PermissionCard'
@@ -890,9 +892,75 @@ function ToolGroup({ tools, skipMotion }: { tools: Message[]; skipMotion?: boole
 
 // ─── System Message ───
 
+const CONTEXT_PREFIX = '__CONTEXT_DATA__'
+const CONTEXT_LOADING = '__CONTEXT_LOADING__'
+const COST_PREFIX = '__COST_DATA__'
+
 function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
-  const isError = message.content.startsWith('Error:') || message.content.includes('unexpectedly')
   const colors = useColors()
+
+  // Cost card
+  const isCost = message.content.startsWith(COST_PREFIX)
+  if (isCost) {
+    try {
+      const data = JSON.parse(message.content.slice(COST_PREFIX.length))
+      const inner = <CostCard data={data} colors={colors} />
+      if (skipMotion) return <div className="py-1">{inner}</div>
+      return (
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="py-1">
+          {inner}
+        </motion.div>
+      )
+    } catch {}
+  }
+
+  // Loading state for /context
+  if (message.content === CONTEXT_LOADING) {
+    const inner = (
+      <div
+        className="text-[11px] leading-[1.5] px-2.5 py-1.5 rounded-lg inline-flex items-center gap-2"
+        style={{ background: colors.surfaceHover, color: colors.textTertiary }}
+      >
+        <SpinnerGap size={11} className="animate-spin" />
+        Fetching context from CLI...
+      </div>
+    )
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.15 }}
+        className="py-0.5"
+      >
+        {inner}
+      </motion.div>
+    )
+  }
+
+  // Rich context card
+  const isContext = message.content.startsWith(CONTEXT_PREFIX)
+  if (isContext) {
+    const jsonStr = message.content.slice(CONTEXT_PREFIX.length)
+    try {
+      const data = JSON.parse(jsonStr)
+      const inner = <ContextCard data={data} colors={colors} />
+      if (skipMotion) return <div className="py-1">{inner}</div>
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+          className="py-1"
+        >
+          {inner}
+        </motion.div>
+      )
+    } catch {
+      // Fall through to normal system message
+    }
+  }
+
+  const isError = message.content.startsWith('Error:') || message.content.includes('unexpectedly')
 
   const inner = (
     <div
@@ -917,6 +985,335 @@ function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?:
     >
       {inner}
     </motion.div>
+  )
+}
+
+// ─── Context Card (rich /context display) ───
+
+interface ContextData {
+  model: string | null
+  maxTokens: number
+  usagePercent: number
+  totalUsed: number
+  categories: Array<{ label: string; tokens: number; percent?: number }>
+  memoryFiles: Array<{ path: string; tokens: number }>
+  skills: Array<{ name: string; tokens: number }>
+  isEstimated?: boolean
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
+}
+
+function formatTokensWhole(n: number): string {
+  if (n >= 1000000) return `${Math.round(n / 1000)}k`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
+}
+
+// Each category gets a distinct color and Phosphor icon
+const CATEGORY_STYLES: Record<string, { color: string; icon: React.ReactNode }> = {
+  'System prompt':      { color: '#e06050', icon: <Cpu size={10} weight="fill" /> },
+  'System tools':       { color: '#9ca3af', icon: <Wrench size={10} weight="fill" /> },
+  'MCP tools':          { color: '#22d3ee', icon: <Plugs size={10} weight="fill" /> },
+  'Custom agents':      { color: '#d97757', icon: <Robot size={10} weight="fill" /> },
+  'Memory files':       { color: '#e06050', icon: <Brain size={10} weight="fill" /> },
+  'Skills':             { color: '#eab308', icon: <Lightning size={10} weight="fill" /> },
+  'Messages':           { color: '#a78bfa', icon: <ChatDots size={10} weight="fill" /> },
+  'Free space':         { color: '#6b7280', icon: <CircleDashed size={10} /> },
+  'Autocompact buffer': { color: '#9ca3af', icon: <Archive size={10} weight="fill" /> },
+  'Compact buffer':     { color: '#9ca3af', icon: <Archive size={10} weight="fill" /> },
+}
+
+const PALETTE_FALLBACK = ['#e06050', '#e0a030', '#50b080', '#6090d0', '#d070b0', '#6b7280']
+
+function getCategoryStyle(label: string, index: number): { color: string; icon: React.ReactNode } {
+  const match = CATEGORY_STYLES[label]
+  if (match) return match
+  return { color: PALETTE_FALLBACK[index % PALETTE_FALLBACK.length], icon: <HardDrives size={10} /> }
+}
+
+/** Build a block-mosaic gauge like the CLI's /context.
+ *  Each category gets proportional cells in its own color. */
+const GAUGE_COLS = 20
+const GAUGE_ROWS = 4
+const TOTAL_CELLS = GAUGE_COLS * GAUGE_ROWS
+
+function buildGaugeCells(categories: ContextData['categories'], maxTokens: number): Array<{ color: string; isFree: boolean }> {
+  const cells: Array<{ color: string; isFree: boolean }> = []
+  for (let i = 0; i < categories.length; i++) {
+    const frac = maxTokens > 0 ? categories[i].tokens / maxTokens : 0
+    let count = Math.round(frac * TOTAL_CELLS)
+    if (categories[i].tokens > 0 && count === 0) count = 1
+    const style = getCategoryStyle(categories[i].label, i)
+    const isFree = categories[i].label === 'Free space'
+    for (let j = 0; j < count && cells.length < TOTAL_CELLS; j++) {
+      cells.push({ color: style.color, isFree })
+    }
+  }
+  // Fill remaining with free-space
+  while (cells.length < TOTAL_CELLS) {
+    cells.push({ color: '#6b7280', isFree: true })
+  }
+  return cells.slice(0, TOTAL_CELLS)
+}
+
+function ContextCard({ data, colors }: { data: ContextData; colors: ReturnType<typeof useColors> }) {
+  const gaugeCells = buildGaugeCells(data.categories, data.maxTokens)
+
+  return (
+    <div
+      className="rounded-lg overflow-hidden text-[11px] leading-[1.5] font-mono"
+      style={{
+        background: colors.surfacePrimary,
+        border: `1px solid ${colors.toolBorder}`,
+        maxWidth: '100%',
+      }}
+    >
+      {/* Header */}
+      <div
+        className="px-3 py-1.5 font-medium text-[11px] flex items-center gap-1.5"
+        style={{ color: colors.textSecondary, borderBottom: `1px solid ${colors.toolBorder}` }}
+      >
+        <span style={{ color: colors.textTertiary }}>{'\u2514'}</span>
+        Context Usage
+      </div>
+
+      <div className="px-3 pt-2.5 pb-2">
+        {/* Gauge + model info side by side */}
+        <div className="flex gap-3 items-start">
+          {/* Block mosaic gauge */}
+          <div
+            className="flex-shrink-0"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${GAUGE_COLS}, 1fr)`,
+              gap: '1.5px',
+              width: GAUGE_COLS * 7,
+            }}
+          >
+            {gaugeCells.map((cell, i) => (
+              <div
+                key={i}
+                style={{
+                  width: 5.5,
+                  height: 5.5,
+                  borderRadius: 1,
+                  background: cell.color,
+                  opacity: cell.isFree ? 0.2 : 0.85,
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Model & token summary */}
+          <div className="min-w-0 flex-1 pt-[1px]">
+            <div style={{ color: colors.textSecondary }}>
+              {data.model || 'unknown'}
+              <span style={{ color: colors.textTertiary }}>
+                {' \u00B7 '}{formatTokens(data.totalUsed)}/{formatTokensWhole(data.maxTokens)} tokens
+              </span>
+            </div>
+            <div style={{ color: colors.textTertiary }}>
+              ({data.usagePercent}%)
+            </div>
+          </div>
+        </div>
+
+        {/* Category breakdown */}
+        <div className="mt-2.5 pl-0.5" style={{ color: colors.textTertiary }}>
+          <div className="text-[10px] mb-1" style={{ color: colors.textSecondary, fontStyle: 'italic' }}>
+            Estimated usage by category
+          </div>
+          {data.categories.map((cat, idx) => {
+            const style = getCategoryStyle(cat.label, idx)
+            const pct = cat.percent != null
+              ? cat.percent
+              : (data.maxTokens > 0 ? (cat.tokens / data.maxTokens) * 100 : 0)
+            const pctStr = pct < 0.05 && pct > 0 ? '0.0' : pct.toFixed(1)
+
+            return (
+              <div key={idx} className="flex items-center gap-1.5">
+                <span className="flex items-center justify-center flex-shrink-0" style={{ color: style.color, width: 12, height: 12 }}>
+                  {style.icon}
+                </span>
+                <span style={{ fontWeight: 500, color: colors.textSecondary }}>{cat.label}:</span>
+                <span>{formatTokens(cat.tokens)} tokens</span>
+                <span style={{ color: colors.textMuted }}>({pctStr}%)</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Memory files section */}
+      {data.memoryFiles.length > 0 && (
+        <div
+          className="px-3 py-2"
+          style={{ borderTop: `1px solid ${colors.toolBorder}` }}
+        >
+          <div className="mb-0.5" style={{ color: colors.textSecondary }}>
+            Memory files <span style={{ color: colors.textTertiary }}>{'\u00B7'} /memory</span>
+          </div>
+          <div style={{ color: colors.textTertiary }}>
+            {data.memoryFiles.map((mf, i) => (
+              <div key={i} className="flex items-baseline gap-1 min-w-0">
+                <span style={{ color: colors.textMuted }}>{i === data.memoryFiles.length - 1 ? '\u2514' : '\u251C'}</span>
+                <span className="truncate">{mf.path}:</span>
+                <span className="flex-shrink-0">{mf.tokens} tokens</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Skills section */}
+      {data.skills.length > 0 && (
+        <div
+          className="px-3 py-2"
+          style={{ borderTop: `1px solid ${colors.toolBorder}` }}
+        >
+          <div className="mb-0.5" style={{ color: colors.textSecondary }}>
+            Skills <span style={{ color: colors.textTertiary }}>{'\u00B7'} /skills</span>
+          </div>
+          <div style={{ color: colors.textTertiary }}>
+            {data.skills.map((skill, i) => (
+              <div key={skill.name} className="flex items-baseline gap-1">
+                <span style={{ color: colors.textMuted }}>{i === data.skills.length - 1 ? '\u2514' : '\u251C'}</span>
+                <span>{skill.name}:</span>
+                <span>{skill.tokens} tokens</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Estimated data note */}
+      {data.isEstimated && (
+        <div
+          className="px-3 py-1.5 text-[10px] leading-[1.4] italic"
+          style={{ borderTop: `1px solid ${colors.toolBorder}`, color: colors.textTertiary }}
+        >
+          Approximate values. Send a message to get exact token counts from the API.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Cost Card ───
+
+interface CostData {
+  cost: number
+  durationMs: number
+  turns: number
+  inputTokens: number
+  outputTokens: number
+  cacheRead: number
+  cacheCreate: number
+  model: string | null
+}
+
+function CostCard({ data, colors }: { data: CostData; colors: ReturnType<typeof useColors> }) {
+  const totalTokens = data.inputTokens + data.outputTokens + data.cacheRead + data.cacheCreate
+  const durationSec = (data.durationMs / 1000).toFixed(1)
+  const costStr = data.cost < 0.01 ? `$${data.cost.toFixed(4)}` : `$${data.cost.toFixed(2)}`
+
+  return (
+    <div
+      className="rounded-lg overflow-hidden text-[11px] leading-[1.5] font-mono"
+      style={{
+        background: colors.surfacePrimary,
+        border: `1px solid ${colors.toolBorder}`,
+        maxWidth: '100%',
+      }}
+    >
+      {/* Header */}
+      <div
+        className="px-3 py-1.5 font-medium text-[11px] flex items-center gap-1.5"
+        style={{ color: colors.textSecondary, borderBottom: `1px solid ${colors.toolBorder}` }}
+      >
+        <CurrencyDollar size={11} style={{ color: colors.accent }} />
+        Cost Summary
+      </div>
+
+      <div className="px-3 py-2">
+        {/* Big cost number */}
+        <div className="flex items-baseline gap-2 mb-2">
+          <span className="text-[18px] font-semibold" style={{ color: colors.textPrimary }}>
+            {costStr}
+          </span>
+          {data.model && (
+            <span className="text-[10px]" style={{ color: colors.textTertiary }}>
+              {data.model}
+            </span>
+          )}
+        </div>
+
+        {/* Stats row */}
+        <div className="flex gap-4" style={{ color: colors.textTertiary }}>
+          <div className="flex items-center gap-1">
+            <Clock size={10} style={{ color: colors.accent }} />
+            <span>{durationSec}s</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <ArrowsClockwise size={10} style={{ color: '#a78bfa' }} />
+            <span>{data.turns} turn{data.turns !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <CoinVertical size={10} style={{ color: '#eab308' }} />
+            <span>{formatTokens(totalTokens)} tokens</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Token breakdown */}
+      {totalTokens > 0 && (
+        <div
+          className="px-3 py-2 space-y-[2px]"
+          style={{ borderTop: `1px solid ${colors.toolBorder}`, color: colors.textTertiary }}
+        >
+          {data.inputTokens > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <span className="flex items-center" style={{ color: '#22d3ee', width: 12 }}><CaretRight size={8} /></span>
+                Input
+              </span>
+              <span>{data.inputTokens.toLocaleString()}</span>
+            </div>
+          )}
+          {data.outputTokens > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <span className="flex items-center" style={{ color: '#a78bfa', width: 12 }}><CaretRight size={8} /></span>
+                Output
+              </span>
+              <span>{data.outputTokens.toLocaleString()}</span>
+            </div>
+          )}
+          {data.cacheRead > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <span className="flex items-center" style={{ color: '#9ca3af', width: 12 }}><CaretRight size={8} /></span>
+                Cache read
+              </span>
+              <span>{data.cacheRead.toLocaleString()}</span>
+            </div>
+          )}
+          {data.cacheCreate > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <span className="flex items-center" style={{ color: '#eab308', width: 12 }}><CaretRight size={8} /></span>
+                Cache write
+              </span>
+              <span>{data.cacheCreate.toLocaleString()}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
