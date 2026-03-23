@@ -499,7 +499,6 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
       onScroll={update}
       style={{
         overflowX: 'auto',
-        scrollbarWidth: 'thin',
         maskImage: fade,
         WebkitMaskImage: fade,
       }}
