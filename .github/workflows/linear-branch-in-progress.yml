@@ -1,0 +1,193 @@
+name: Linear Branch → In Progress
+
+on:
+  create:
+
+permissions:
+  contents: read
+
+jobs:
+  move-to-in-progress:
+    if: github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract Linear issue IDs from branch name
+        id: extract
+        run: |
+          BRANCH_NAME="${{ github.event.ref }}"
+          echo "Branch: $BRANCH_NAME"
+
+          # Find all Linear-style issue IDs (2-5 uppercase letters followed by dash and numbers)
+          ISSUE_IDS=$(echo "$BRANCH_NAME" | grep -oE '[A-Z]{2,5}-[0-9]+' | sort -u | tr '\n' ' ')
+
+          if [ -z "$ISSUE_IDS" ]; then
+            echo "No Linear issue IDs found in branch name"
+            echo "found=false" >> $GITHUB_OUTPUT
+          else
+            echo "Found Linear issue IDs: $ISSUE_IDS"
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "issue_ids=$ISSUE_IDS" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for Linear API key
+        if: steps.extract.outputs.found == 'true'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then
+            echo "::error::LINEAR_API_KEY secret is not set. Please add it to the repository secrets."
+            exit 1
+          fi
+
+      - name: Move Todo issues to In Progress
+        if: steps.extract.outputs.found == 'true'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          ISSUE_IDS="${{ steps.extract.outputs.issue_ids }}"
+
+          # Clean the API key (remove any whitespace)
+          LINEAR_API_KEY=$(echo "$LINEAR_API_KEY" | tr -d '[:space:]')
+
+          echo "Processing issues: $ISSUE_IDS"
+
+          # Cache team "In Progress" state IDs
+          declare -A TEAM_IN_PROGRESS_STATES
+
+          for ISSUE_ID in $ISSUE_IDS; do
+            echo ""
+            echo "========================================"
+            echo "Processing issue: $ISSUE_ID"
+            echo "========================================"
+
+            # Get the issue details from Linear
+            echo "{\"query\": \"query { issue(id: \\\"$ISSUE_ID\\\") { id identifier title team { id key } state { id name } } }\"}" > /tmp/query.json
+            ISSUE_RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "apollo-require-preflight: 1" \
+              --data-binary @/tmp/query.json)
+
+            # Check if issue was found
+            ISSUE_INTERNAL_ID=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.id // empty')
+
+            if [ -z "$ISSUE_INTERNAL_ID" ]; then
+              echo "Issue $ISSUE_ID not found in Linear, skipping..."
+              continue
+            fi
+
+            ISSUE_TITLE=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.title')
+            TEAM_ID=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.team.id')
+            TEAM_KEY=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.team.key')
+            CURRENT_STATE=$(echo "$ISSUE_RESPONSE" | jq -r '.data.issue.state.name')
+
+            echo "Found issue: $ISSUE_ID - $ISSUE_TITLE"
+            echo "Team: $TEAM_KEY (ID: $TEAM_ID)"
+            echo "Current state: $CURRENT_STATE"
+
+            # Only process issues in "Todo" or "In Progress"
+            IS_TODO=false
+            if echo "$CURRENT_STATE" | grep -iqE '^todo$'; then
+              IS_TODO=true
+            elif echo "$CURRENT_STATE" | grep -iqE '^in.?progress$'; then
+              IS_TODO=false
+            else
+              echo "Issue $ISSUE_ID is in '$CURRENT_STATE', not 'Todo' or 'In Progress'. Skipping..."
+              continue
+            fi
+
+            # Link branch to issue as attachment
+            BRANCH_URL="https://github.com/${{ github.repository }}/tree/${{ github.event.ref }}"
+            echo "Linking branch to issue..."
+
+            echo "{\"query\": \"mutation { attachmentCreate(input: { issueId: \\\"$ISSUE_INTERNAL_ID\\\", url: \\\"$BRANCH_URL\\\", title: \\\"Branch: ${{ github.event.ref }}\\\" }) { success attachment { id url } } }\"}" > /tmp/query.json
+            ATTACHMENT_RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "apollo-require-preflight: 1" \
+              --data-binary @/tmp/query.json)
+
+            ATTACHMENT_SUCCESS=$(echo "$ATTACHMENT_RESPONSE" | jq -r '.data.attachmentCreate.success // false')
+
+            if [ "$ATTACHMENT_SUCCESS" == "true" ]; then
+              echo "Successfully linked branch to issue $ISSUE_ID"
+            else
+              echo "Note: Attachment may already exist or there was an issue creating it"
+            fi
+
+            # Only move to "In Progress" if issue is currently in "Todo"
+            if [ "$IS_TODO" != "true" ]; then
+              echo "Issue is already 'In Progress', skipping state update"
+              echo "Done processing issue $ISSUE_ID"
+              continue
+            fi
+
+            echo "Issue is in 'Todo' state, moving to 'In Progress'..."
+
+            # Get "In Progress" state ID for this team if not cached
+            if [ -z "${TEAM_IN_PROGRESS_STATES[$TEAM_ID]}" ]; then
+              echo "Fetching workflow states for team $TEAM_KEY..."
+
+              echo "{\"query\": \"query { team(id: \\\"$TEAM_ID\\\") { states { nodes { id name type } } } }\"}" > /tmp/query.json
+              STATES_RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
+                -H "Authorization: $LINEAR_API_KEY" \
+                -H "Content-Type: application/json" \
+                -H "apollo-require-preflight: 1" \
+                --data-binary @/tmp/query.json)
+
+              # Try to find "In Progress" state
+              IN_PROGRESS_STATE_ID=$(echo "$STATES_RESPONSE" | jq -r '.data.team.states.nodes[] | select(.name == "In Progress") | .id // empty' | head -1)
+
+              # If not found, try case-insensitive match
+              if [ -z "$IN_PROGRESS_STATE_ID" ]; then
+                IN_PROGRESS_STATE_ID=$(echo "$STATES_RESPONSE" | jq -r '.data.team.states.nodes[] | select(.name | test("(?i)in.?progress")) | .id // empty' | head -1)
+              fi
+
+              # If still not found, try any "started" type state
+              if [ -z "$IN_PROGRESS_STATE_ID" ]; then
+                IN_PROGRESS_STATE_ID=$(echo "$STATES_RESPONSE" | jq -r '.data.team.states.nodes[] | select(.type == "started") | .id // empty' | head -1)
+              fi
+
+              if [ -z "$IN_PROGRESS_STATE_ID" ]; then
+                echo "Warning: Could not find 'In Progress' state for team $TEAM_KEY"
+                echo "Available states:"
+                echo "$STATES_RESPONSE" | jq -r '.data.team.states.nodes[] | "\(.name) (\(.type))"'
+              else
+                TEAM_IN_PROGRESS_STATES[$TEAM_ID]=$IN_PROGRESS_STATE_ID
+                echo "Found 'In Progress' state ID: $IN_PROGRESS_STATE_ID"
+              fi
+            fi
+
+            IN_PROGRESS_STATE_ID="${TEAM_IN_PROGRESS_STATES[$TEAM_ID]}"
+
+            if [ -z "$IN_PROGRESS_STATE_ID" ]; then
+              echo "Skipping state update - 'In Progress' state not found for team $TEAM_KEY"
+              echo "Done processing issue $ISSUE_ID"
+              continue
+            fi
+
+            # Move issue to "In Progress"
+            echo "{\"query\": \"mutation { issueUpdate(id: \\\"$ISSUE_INTERNAL_ID\\\", input: { stateId: \\\"$IN_PROGRESS_STATE_ID\\\" }) { success issue { id identifier state { name } } } }\"}" > /tmp/query.json
+            UPDATE_RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "apollo-require-preflight: 1" \
+              --data-binary @/tmp/query.json)
+
+            UPDATE_SUCCESS=$(echo "$UPDATE_RESPONSE" | jq -r '.data.issueUpdate.success // false')
+            NEW_STATE=$(echo "$UPDATE_RESPONSE" | jq -r '.data.issueUpdate.issue.state.name // "unknown"')
+
+            if [ "$UPDATE_SUCCESS" == "true" ]; then
+              echo "Successfully moved issue $ISSUE_ID to state: $NEW_STATE"
+            else
+              echo "Failed to update issue $ISSUE_ID state"
+              echo "Response: $UPDATE_RESPONSE"
+            fi
+
+            echo "Done processing issue $ISSUE_ID"
+          done
+
+          echo ""
+          echo "========================================"
+          echo "Linear branch integration complete!"
+          echo "========================================"
