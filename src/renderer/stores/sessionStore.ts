@@ -60,6 +60,15 @@ interface State {
   installMarketplacePlugin: (plugin: CatalogPlugin) => Promise<void>
   uninstallMarketplacePlugin: (plugin: CatalogPlugin) => Promise<void>
   buildYourOwn: () => void
+  nextTab: () => void
+  prevTab: () => void
+  createTabInSameFolder: () => Promise<string>
+  stopActiveRun: () => void
+  copyLastResponse: () => void
+  /** Open/close the history picker from outside HistoryPicker component */
+  historyPickerOpen: boolean
+  toggleHistoryPicker: () => void
+  closeHistoryPicker: () => void
   resumeSession: (sessionId: string, title?: string, projectPath?: string) => Promise<string>
   addSystemMessage: (content: string) => void
   sendMessage: (prompt: string, projectPath?: string) => void
@@ -166,6 +175,9 @@ export const useSessionStore = create<State>((set, get) => ({
   staticInfo: null,
   preferredModel: null,
   permissionMode: 'ask',
+
+  // History picker
+  historyPickerOpen: false,
 
   // Marketplace
   marketplaceOpen: false,
@@ -355,6 +367,90 @@ export const useSessionStore = create<State>((set, get) => ({
     setTimeout(() => {
       get().sendMessage('Help me create a new Claude Code skill')
     }, 100)
+  },
+
+  nextTab: () => {
+    const { tabs, activeTabId } = get()
+    if (tabs.length <= 1) return
+    const idx = tabs.findIndex((t) => t.id === activeTabId)
+    const next = tabs[(idx + 1) % tabs.length]
+    set((s) => ({
+      activeTabId: next.id,
+      marketplaceOpen: false,
+      tabs: s.tabs.map((t) => t.id === next.id ? { ...t, hasUnread: false } : t),
+    }))
+  },
+
+  prevTab: () => {
+    const { tabs, activeTabId } = get()
+    if (tabs.length <= 1) return
+    const idx = tabs.findIndex((t) => t.id === activeTabId)
+    const prev = tabs[(idx - 1 + tabs.length) % tabs.length]
+    set((s) => ({
+      activeTabId: prev.id,
+      marketplaceOpen: false,
+      tabs: s.tabs.map((t) => t.id === prev.id ? { ...t, hasUnread: false } : t),
+    }))
+  },
+
+  createTabInSameFolder: async () => {
+    const { tabs, activeTabId } = get()
+    const currentTab = tabs.find((t) => t.id === activeTabId)
+    const dir = currentTab?.workingDirectory || get().staticInfo?.homePath || '~'
+    try {
+      const { tabId } = await window.clui.createTab()
+      const tab: TabState = {
+        ...makeLocalTab(),
+        id: tabId,
+        workingDirectory: dir,
+        hasChosenDirectory: currentTab?.hasChosenDirectory ?? false,
+      }
+      set((s) => ({
+        tabs: [...s.tabs, tab],
+        activeTabId: tab.id,
+      }))
+      return tabId
+    } catch {
+      const tab = makeLocalTab()
+      tab.workingDirectory = dir
+      tab.hasChosenDirectory = currentTab?.hasChosenDirectory ?? false
+      set((s) => ({
+        tabs: [...s.tabs, tab],
+        activeTabId: tab.id,
+      }))
+      return tab.id
+    }
+  },
+
+  stopActiveRun: () => {
+    const { activeTabId, tabs } = get()
+    const tab = tabs.find((t) => t.id === activeTabId)
+    if (!tab) return
+    if (tab.status === 'running' || tab.status === 'connecting') {
+      window.clui.stopTab(activeTabId).catch(() => {})
+    }
+  },
+
+  copyLastResponse: () => {
+    const { activeTabId, tabs } = get()
+    const tab = tabs.find((t) => t.id === activeTabId)
+    if (!tab) return
+    // Find the last assistant message (non-tool)
+    for (let i = tab.messages.length - 1; i >= 0; i--) {
+      const msg = tab.messages[i]
+      if (msg.role === 'assistant' && !msg.toolName) {
+        navigator.clipboard.writeText(msg.content).catch(() => {})
+        return
+      }
+    }
+  },
+
+  toggleHistoryPicker: () => {
+    set((s) => ({ historyPickerOpen: !s.historyPickerOpen }))
+  },
+
+  closeHistoryPicker: () => {
+    set({ historyPickerOpen: false })
   },
 
   closeTab: (tabId) => {

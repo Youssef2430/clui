@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useImperativeHandle, forwardRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Microphone, ArrowUp, SpinnerGap, X, Check, Wrench, CheckCircle } from '@phosphor-icons/react'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
@@ -14,11 +14,16 @@ const INLINE_CONTROLS_RESERVED_WIDTH = 104
 
 type VoiceState = 'idle' | 'recording' | 'transcribing'
 
+export interface InputBarHandle {
+  focus: () => void
+  openSlashMenu: () => void
+}
+
 /**
  * InputBar renders inside a glass-surface rounded-full pill provided by App.tsx.
  * It provides: textarea + mic/send buttons. Attachment chips render above when present.
  */
-export function InputBar() {
+export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref) {
   const [input, setInput] = useState('')
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
   const [voiceError, setVoiceError] = useState<{ message: string; fixable: boolean } | null>(null)
@@ -31,6 +36,16 @@ export function InputBar() {
   const measureRef = useRef<HTMLTextAreaElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+
+  useImperativeHandle(ref, () => ({
+    focus: () => textareaRef.current?.focus(),
+    openSlashMenu: () => {
+      setInput('/')
+      setSlashFilter('/')
+      setSlashIndex(0)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    },
+  }), [])
 
   const sendMessage = useSessionStore((s) => s.sendMessage)
   const clearTab = useSessionStore((s) => s.clearTab)
@@ -628,7 +643,7 @@ export function InputBar() {
       )}
     </div>
   )
-}
+})
 
 // ─── Voice Buttons (extracted to avoid duplication) ───
 

@@ -1,14 +1,15 @@
-import React, { useEffect, useCallback } from 'react'
+import React, { useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Paperclip, Camera, HeadCircuit } from '@phosphor-icons/react'
 import { TabStrip } from './components/TabStrip'
 import { ConversationView } from './components/ConversationView'
-import { InputBar } from './components/InputBar'
+import { InputBar, type InputBarHandle } from './components/InputBar'
 import { StatusBar } from './components/StatusBar'
 import { MarketplacePanel } from './components/MarketplacePanel'
 import { PopoverLayerProvider } from './components/PopoverLayer'
 import { useClaudeEvents } from './hooks/useClaudeEvents'
 import { useHealthReconciliation } from './hooks/useHealthReconciliation'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useSessionStore } from './stores/sessionStore'
 import { useColors, useThemeStore, spacing } from './theme'
 
@@ -107,6 +108,7 @@ export default function App() {
   const isExpanded = useSessionStore((s) => s.isExpanded)
   const marketplaceOpen = useSessionStore((s) => s.marketplaceOpen)
   const isRunning = activeTabStatus === 'running' || activeTabStatus === 'connecting'
+  const inputBarRef = useRef<InputBarHandle>(null)
 
   // Layout dimensions — expandedUI widens and heightens the panel
   const contentWidth = expandedUI ? 700 : spacing.contentWidth
@@ -126,6 +128,13 @@ export default function App() {
     if (!files || files.length === 0) return
     addAttachments(files)
   }, [addAttachments])
+
+  useKeyboardShortcuts({
+    onAttachFile: handleAttachFile,
+    onScreenshot: handleScreenshot,
+    onFocusInput: useCallback(() => inputBarRef.current?.focus(), []),
+    onOpenSlashMenu: useCallback(() => inputBarRef.current?.openSlashMenu(), []),
+  })
 
   return (
     <PopoverLayerProvider>
@@ -262,7 +271,7 @@ export default function App() {
               className="glass-surface w-full"
               style={{ minHeight: 50, borderRadius: 25, padding: '0 6px 0 16px', background: colors.inputPillBg }}
             >
-              <InputBar />
+              <InputBar ref={inputBarRef} />
             </div>
           </div>
         </div>
