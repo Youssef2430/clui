@@ -29,6 +29,7 @@ export interface CluiAPI {
   listAllSessions(): Promise<SessionMeta[]>
   loadSession(sessionId: string, projectPath?: string): Promise<SessionLoadMessage[]>
   getToolResults(sessionId: string, projectPath: string): Promise<Record<string, string>>
+  getContext(sessionId: string, projectPath: string, sessionData?: any): Promise<any>
   fetchMarketplace(forceRefresh?: boolean): Promise<{ plugins: CatalogPlugin[]; error: string | null }>
   listInstalledPlugins(): Promise<string[]>
   installPlugin(repo: string, pluginName: string, marketplace: string, sourcePath?: string, isSkillMd?: boolean): Promise<{ ok: boolean; error?: string }>
@@ -88,6 +89,7 @@ const api: CluiAPI = {
   listAllSessions: () => ipcRenderer.invoke(IPC.LIST_ALL_SESSIONS),
   loadSession: (sessionId: string, projectPath?: string) => ipcRenderer.invoke(IPC.LOAD_SESSION, { sessionId, projectPath }),
   getToolResults: (sessionId: string, projectPath: string) => ipcRenderer.invoke(IPC.GET_TOOL_RESULTS, { sessionId, projectPath }),
+  getContext: (sessionId: string, projectPath: string, sessionData?: any) => ipcRenderer.invoke(IPC.GET_CONTEXT, { sessionId, projectPath, sessionData }),
   fetchMarketplace: (forceRefresh) => ipcRenderer.invoke(IPC.MARKETPLACE_FETCH, { forceRefresh }),
   listInstalledPlugins: () => ipcRenderer.invoke(IPC.MARKETPLACE_INSTALLED),
   installPlugin: (repo, pluginName, marketplace, sourcePath, isSkillMd) =>

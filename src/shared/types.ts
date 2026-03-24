@@ -330,6 +330,7 @@ export const IPC = {
   LIST_ALL_SESSIONS: 'clui:list-all-sessions',
   LOAD_SESSION: 'clui:load-session',
   GET_TOOL_RESULTS: 'clui:get-tool-results',
+  GET_CONTEXT: 'clui:get-context',
 
   // One-way events (main → renderer)
   TEXT_CHUNK: 'clui:text-chunk',
