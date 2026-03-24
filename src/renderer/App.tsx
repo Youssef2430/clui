@@ -134,6 +134,7 @@ export default function App() {
     onScreenshot: handleScreenshot,
     onFocusInput: useCallback(() => inputBarRef.current?.focus(), []),
     onOpenSlashMenu: useCallback(() => inputBarRef.current?.openSlashMenu(), []),
+    onVoiceCapture: useCallback(() => inputBarRef.current?.toggleVoice(), []),
   })
 
   return (

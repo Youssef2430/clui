@@ -17,6 +17,7 @@ type VoiceState = 'idle' | 'recording' | 'transcribing'
 export interface InputBarHandle {
   focus: () => void
   openSlashMenu: () => void
+  toggleVoice: () => void
 }
 
 /**
@@ -36,6 +37,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
   const measureRef = useRef<HTMLTextAreaElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const voiceToggleRef = useRef<() => void>(() => {})
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
@@ -45,6 +47,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
       setSlashIndex(0)
       requestAnimationFrame(() => textareaRef.current?.focus())
     },
+    toggleVoice: () => voiceToggleRef.current(),
   }), [])
 
   const sendMessage = useSessionStore((s) => s.sendMessage)
@@ -457,6 +460,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
     if (voiceState === 'recording') stopRecording()
     else if (voiceState === 'idle') void startRecording()
   }, [voiceState, startRecording, stopRecording])
+  voiceToggleRef.current = handleVoiceToggle
 
   const hasAttachments = attachments.length > 0
 
