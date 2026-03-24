@@ -932,6 +932,27 @@ ipcMain.handle(IPC.GET_CONTEXT, async (_e, arg: { sessionId: string; projectPath
   }
 })
 
+ipcMain.handle(IPC.LIST_DIR, async (_e, dirPath: string) => {
+  try {
+    if (!existsSync(dirPath)) return []
+    const entries = readdirSync(dirPath, { withFileTypes: true })
+    const results: Array<{ name: string; isDirectory: boolean }> = []
+    for (const entry of entries) {
+      // Skip hidden files/folders
+      if (entry.name.startsWith('.')) continue
+      results.push({ name: entry.name, isDirectory: entry.isDirectory() })
+    }
+    // Sort: directories first, then alphabetical
+    results.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+    return results
+  } catch {
+    return []
+  }
+})
+
 ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
   if (!mainWindow) return null
   // macOS: activate app so unparented dialog appears on top (not behind other apps).
