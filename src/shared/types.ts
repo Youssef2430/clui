@@ -170,6 +170,10 @@ export interface TabState {
   hasChosenDirectory: boolean
   /** Extra directories accessible via --add-dir (session-preserving) */
   additionalDirs: string[]
+  /** Live todo/task state built from TodoWrite tool completions */
+  todos: Record<string, TodoTask>
+  /** Message ID of the injected TodoCard system message, updated in-place */
+  todoMessageId: string | null
 }
 
 export interface Message {
@@ -190,6 +194,17 @@ export interface RunResult {
   numTurns: number
   usage: UsageData
   sessionId: string
+}
+
+// ─── Todo/Task State ───
+
+export interface TodoTask {
+  id: string
+  subject: string
+  description?: string
+  status: 'pending' | 'in_progress' | 'completed' | 'deleted'
+  blockedBy?: string[]
+  blocks?: string[]
 }
 
 // ─── Canonical Events (normalized from raw stream) ───

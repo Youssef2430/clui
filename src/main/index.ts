@@ -672,6 +672,13 @@ ipcMain.handle(IPC.GET_CONTEXT, async (_e, arg: { sessionId: string; projectPath
   const { sessionId, projectPath, sessionData } = arg
   log(`IPC GET_CONTEXT session=${sessionId} path=${projectPath}`)
 
+  // Fix #1: Validate sessionId is a UUID to prevent path traversal
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!UUID_RE.test(sessionId)) {
+    log(`GET_CONTEXT: invalid sessionId rejected: ${sessionId}`)
+    return null
+  }
+
   try {
     const { readFileSync } = require('fs')
     const cwd = projectPath === '~' ? homedir() : projectPath
@@ -792,14 +799,16 @@ ipcMain.handle(IPC.GET_CONTEXT, async (_e, arg: { sessionId: string; projectPath
     // Skills live in ~/.claude/skills/<name>/SKILL.md or similar
     const skillsDir = join(homedir(), '.claude', 'skills')
     if (existsSync(skillsDir) && skills.length > 0) {
+      // Fix #4: Only scan skills that are active in the current session
+      const activeSkillSet = new Set(skills.map((s) => s.toLowerCase()))
       try {
         const skillDirs = readdirSync(skillsDir)
         for (const skillDir of skillDirs) {
+          if (!activeSkillSet.has(skillDir.toLowerCase())) continue
           const skillMd = join(skillsDir, skillDir, 'SKILL.md')
           if (existsSync(skillMd)) {
             try {
               const content = readFileSync(skillMd, 'utf-8')
-              // CLI counts [name, desc, whenToUse].join(" ") / 4 for frontmatter
               const tokens = Math.ceil(content.length / 4)
               totalSkillChars += content.length
               skillDetails.push({ name: skillDir, tokens })

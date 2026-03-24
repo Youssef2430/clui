@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { TabStatus, NormalizedEvent, EnrichedError, Message, TabState, Attachment, CatalogPlugin, PluginStatus } from '../../shared/types'
+import type { TabStatus, NormalizedEvent, EnrichedError, Message, TabState, Attachment, CatalogPlugin, PluginStatus, TodoTask } from '../../shared/types'
 import { useThemeStore } from '../theme'
 import notificationSrc from '../../../resources/notification.mp3'
 
@@ -93,6 +93,42 @@ async function playNotificationIfHidden(): Promise<void> {
   } catch {}
 }
 
+// ─── Todo/Task helpers ───
+
+const TODO_PREFIX = '__TODO_DATA__'
+
+function tryParseJson(s?: string): Record<string, unknown> | null {
+  if (!s) return null
+  try { return JSON.parse(s) } catch { return null }
+}
+
+/** Parse TodoWrite input into a flat todo list. Each call contains the full state. */
+function parseTodoWriteInput(input: Record<string, unknown>): Record<string, TodoTask> {
+  const todos: Record<string, TodoTask> = {}
+  const items = Array.isArray(input.todos) ? input.todos : []
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (!item || typeof item !== 'object') continue
+    const id = String(item.id ?? i + 1)
+    const VALID_STATUSES = new Set(['pending', 'in_progress', 'completed', 'deleted'])
+    const rawStatus = typeof item.status === 'string' ? item.status : ''
+    const status: TodoTask['status'] = VALID_STATUSES.has(rawStatus)
+      ? (rawStatus as TodoTask['status'])
+      : 'pending'
+    todos[id] = {
+      id,
+      subject: String(item.content || item.subject || item.title || ''),
+      description: item.description ? String(item.description) : undefined,
+      status,
+    }
+  }
+  return todos
+}
+
+function buildTodoContent(todos: Record<string, TodoTask>): string {
+  return TODO_PREFIX + JSON.stringify(Object.values(todos))
+}
+
 function makeLocalTab(): TabState {
   return {
     id: crypto.randomUUID(),
@@ -116,6 +152,8 @@ function makeLocalTab(): TabState {
     workingDirectory: '~',
     hasChosenDirectory: false,
     additionalDirs: [],
+    todos: {},
+    todoMessageId: null,
   }
 }
 
@@ -344,7 +382,7 @@ export const useSessionStore = create<State>((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === activeTabId
-          ? { ...t, messages: [], lastResult: null, currentActivity: '', permissionQueue: [], permissionDenied: null, queuedPrompts: [] }
+          ? { ...t, messages: [], lastResult: null, currentActivity: '', permissionQueue: [], permissionDenied: null, queuedPrompts: [], todos: {}, todoMessageId: null }
           : t
       ),
     }))
@@ -648,6 +686,8 @@ export const useSessionStore = create<State>((set, get) => ({
             if (!event.isWarmup) {
               updated.status = 'running'
               updated.currentActivity = 'Thinking...'
+              updated.todos = {}
+              updated.todoMessageId = null
               // Move the first queued prompt into the timeline (it's now being processed)
               if (updated.queuedPrompts.length > 0) {
                 const [nextPrompt, ...rest] = updated.queuedPrompts
@@ -727,6 +767,38 @@ export const useSessionStore = create<State>((set, get) => ({
               runningTool.toolStatus = 'completed'
             }
             updated.messages = msgs2
+
+            // Intercept TodoWrite completions to build live todo state
+            if (runningTool && runningTool.toolName === 'TodoWrite') {
+              const input = tryParseJson(runningTool.toolInput)
+              if (input) {
+                updated.todos = parseTodoWriteInput(input)
+              }
+
+              // Inject, update, or remove the TodoCard based on visible tasks
+              const visibleTasks = Object.values(updated.todos).filter((t) => t.status !== 'deleted')
+              if (visibleTasks.length > 0) {
+                const todoContent = buildTodoContent(updated.todos)
+                if (updated.todoMessageId) {
+                  updated.messages = updated.messages.map((m) =>
+                    m.id === updated.todoMessageId ? { ...m, content: todoContent } : m
+                  )
+                } else {
+                  const newMsg: Message = {
+                    id: nextMsgId(),
+                    role: 'system',
+                    content: todoContent,
+                    timestamp: Date.now(),
+                  }
+                  updated.messages = [...updated.messages, newMsg]
+                  updated.todoMessageId = newMsg.id
+                }
+              } else if (updated.todoMessageId) {
+                // No visible tasks remain — remove stale TodoCard
+                updated.messages = updated.messages.filter((m) => m.id !== updated.todoMessageId)
+                updated.todoMessageId = null
+              }
+            }
             break
           }
 
@@ -933,6 +1005,7 @@ export const useSessionStore = create<State>((set, get) => ({
                   }
                   return m
                 })
+
                 return { ...t, messages: updatedMsgs }
               }),
             }))

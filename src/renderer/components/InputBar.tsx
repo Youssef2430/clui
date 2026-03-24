@@ -229,8 +229,9 @@ export function InputBar() {
 
         addSystemMessage('__CONTEXT_LOADING__')
 
-        // Pass the tab's in-memory session data (which has real API usage)
-        // to the main process, which reads memory/skill files from disk
+        // Fix #2: Capture the initiating tab ID so tab switches don't corrupt state
+        const originTabId = tab.id
+
         const sessionData = {
           sessionId: tab.claudeSessionId,
           projectPath: tab.workingDirectory,
@@ -246,33 +247,35 @@ export function InputBar() {
             .reduce((sum, m) => sum + m.content.length, 0),
         }
 
-        window.clui.getContext(tab.claudeSessionId, tab.workingDirectory, sessionData).then((data) => {
-          // Remove the loading message
-          const { activeTabId: tid } = useSessionStore.getState()
+        const removeLoading = () => {
           useSessionStore.setState((s) => ({
             tabs: s.tabs.map((t) => {
-              if (t.id !== tid) return t
+              if (t.id !== originTabId) return t
               const msgs = t.messages.filter((m) => m.content !== '__CONTEXT_LOADING__')
               return { ...t, messages: msgs }
             }),
           }))
+        }
 
+        const addToOriginTab = (content: string) => {
+          useSessionStore.setState((s) => ({
+            tabs: s.tabs.map((t) => {
+              if (t.id !== originTabId) return t
+              return { ...t, messages: [...t.messages, { id: `msg-${Date.now()}`, role: 'system' as const, content, timestamp: Date.now() }] }
+            }),
+          }))
+        }
+
+        window.clui.getContext(tab.claudeSessionId, tab.workingDirectory, sessionData).then((data) => {
+          removeLoading()
           if (data && data.categories && data.categories.length > 0) {
-            addSystemMessage(`__CONTEXT_DATA__${JSON.stringify(data)}`)
+            addToOriginTab(`__CONTEXT_DATA__${JSON.stringify(data)}`)
           } else {
-            console.warn('/context: no data returned', data)
-            addSystemMessage('Could not retrieve context data. Make sure the Claude CLI is installed and the session is active.')
+            addToOriginTab('Could not retrieve context data. Make sure the Claude CLI is installed and the session is active.')
           }
         }).catch(() => {
-          const { activeTabId: tid } = useSessionStore.getState()
-          useSessionStore.setState((s) => ({
-            tabs: s.tabs.map((t) => {
-              if (t.id !== tid) return t
-              const msgs = t.messages.filter((m) => m.content !== '__CONTEXT_LOADING__')
-              return { ...t, messages: msgs }
-            }),
-          }))
-          addSystemMessage('Error: Failed to get context data.')
+          removeLoading()
+          addToOriginTab('Error: Failed to get context data.')
         })
         break
       }

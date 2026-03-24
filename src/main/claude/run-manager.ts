@@ -106,7 +106,8 @@ export class RunManager extends EventEmitter {
 
   /** Expose resolved binary path and env for one-off CLI calls */
   getClaudeInfo(): { binary: string; env: NodeJS.ProcessEnv } {
-    return { binary: this.claudeBinary, env: this._cachedEnv || { ...process.env } }
+    const env = this._cachedEnv || process.env
+    return { binary: this.claudeBinary, env: { ...env } }
   }
 
   private _findClaudeBinary(): string {
