@@ -33,6 +33,15 @@ interface State {
   /** Global permission mode: 'ask' shows cards, 'auto' auto-approves all tool calls */
   permissionMode: 'ask' | 'auto'
 
+  // BTW side question state
+  btwState: {
+    btwId: string
+    question: string
+    responseText: string
+    status: 'loading' | 'streaming' | 'done' | 'error'
+    errorMessage?: string
+  } | null
+
   // Marketplace state
   marketplaceOpen: boolean
   marketplaceCatalog: CatalogPlugin[]
@@ -79,6 +88,12 @@ interface State {
   addAttachments: (attachments: Attachment[]) => void
   removeAttachment: (attachmentId: string) => void
   clearAttachments: () => void
+  // BTW actions
+  submitBtw: (question: string) => void
+  appendBtwChunk: (btwId: string, text: string) => void
+  setBtwDone: (btwId: string) => void
+  setBtwError: (btwId: string, message: string) => void
+  dismissBtw: () => void
   handleNormalizedEvent: (tabId: string, event: NormalizedEvent) => void
   handleStatusChange: (tabId: string, newStatus: string, oldStatus: string) => void
   handleError: (tabId: string, error: EnrichedError) => void
@@ -175,6 +190,7 @@ export const useSessionStore = create<State>((set, get) => ({
   staticInfo: null,
   preferredModel: null,
   permissionMode: 'ask',
+  btwState: null,
 
   // History picker
   historyPickerOpen: false,
@@ -675,6 +691,59 @@ export const useSessionStore = create<State>((set, get) => ({
         t.id === activeTabId ? { ...t, attachments: [] } : t
       ),
     }))
+  },
+
+  // ─── BTW Side Question ───
+
+  submitBtw: (question) => {
+    const { activeTabId, tabs } = get()
+    const tab = tabs.find((t) => t.id === activeTabId)
+    if (!tab) return
+
+    const btwId = crypto.randomUUID()
+    set({ btwState: { btwId, question, responseText: '', status: 'loading' } })
+
+    window.clui.btwPrompt({
+      btwId,
+      question,
+      projectPath: tab.workingDirectory,
+    }).catch(() => {
+      set((s) => s.btwState?.btwId === btwId
+        ? { btwState: { ...s.btwState!, status: 'error' as const, errorMessage: 'Failed to start' } }
+        : {}
+      )
+    })
+  },
+
+  appendBtwChunk: (btwId, text) => {
+    set((s) => {
+      if (!s.btwState || s.btwState.btwId !== btwId) return {}
+      return {
+        btwState: {
+          ...s.btwState,
+          responseText: s.btwState.responseText + text,
+          status: 'streaming' as const,
+        },
+      }
+    })
+  },
+
+  setBtwDone: (btwId) => {
+    set((s) => {
+      if (!s.btwState || s.btwState.btwId !== btwId) return {}
+      return { btwState: { ...s.btwState, status: 'done' as const } }
+    })
+  },
+
+  setBtwError: (btwId, message) => {
+    set((s) => {
+      if (!s.btwState || s.btwState.btwId !== btwId) return {}
+      return { btwState: { ...s.btwState, status: 'error' as const, errorMessage: message } }
+    })
+  },
+
+  dismissBtw: () => {
+    set({ btwState: null })
   },
 
   // ─── Send ───

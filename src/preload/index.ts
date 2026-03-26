@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/types'
-import type { RunOptions, NormalizedEvent, HealthReport, EnrichedError, Attachment, SessionMeta, CatalogPlugin, SessionLoadMessage } from '../shared/types'
+import type { RunOptions, NormalizedEvent, HealthReport, EnrichedError, Attachment, SessionMeta, CatalogPlugin, SessionLoadMessage, BtwOptions, BtwEvent } from '../shared/types'
 
 export interface CluiAPI {
   // ─── Request-response (renderer → main) ───
@@ -36,6 +36,8 @@ export interface CluiAPI {
   installPlugin(repo: string, pluginName: string, marketplace: string, sourcePath?: string, isSkillMd?: boolean): Promise<{ ok: boolean; error?: string }>
   uninstallPlugin(pluginName: string): Promise<{ ok: boolean; error?: string }>
   setPermissionMode(mode: string): void
+  btwPrompt(opts: BtwOptions): Promise<void>
+  onBtwEvent(callback: (event: BtwEvent) => void): () => void
   getTheme(): Promise<{ isDark: boolean }>
   onThemeChange(callback: (isDark: boolean) => void): () => void
 
@@ -99,6 +101,12 @@ const api: CluiAPI = {
   uninstallPlugin: (pluginName) =>
     ipcRenderer.invoke(IPC.MARKETPLACE_UNINSTALL, { pluginName }),
   setPermissionMode: (mode) => ipcRenderer.send(IPC.SET_PERMISSION_MODE, mode),
+  btwPrompt: (opts) => ipcRenderer.invoke(IPC.BTW_PROMPT, opts),
+  onBtwEvent: (callback) => {
+    const handler = (_e: Electron.IpcRendererEvent, event: BtwEvent) => callback(event)
+    ipcRenderer.on(IPC.BTW_EVENT, handler)
+    return () => ipcRenderer.removeListener(IPC.BTW_EVENT, handler)
+  },
   getTheme: () => ipcRenderer.invoke(IPC.GET_THEME),
   onThemeChange: (callback) => {
     const handler = (_e: Electron.IpcRendererEvent, isDark: boolean) => callback(isDark)

@@ -818,6 +818,84 @@ export class ControlPlane extends EventEmitter {
     this.emit('tab-status-change', tabId, newStatus, oldStatus)
   }
 
+  // ─── BTW Side Question ───
+
+  /**
+   * Start a lightweight btw (side question) run that bypasses the tab
+   * state machine entirely. Uses the RunManager directly with scoped
+   * listeners so the main conversation is never interrupted.
+   */
+  startBtwRun(
+    btwId: string,
+    options: RunOptions,
+    onChunk: (text: string) => void,
+    onDone: () => void,
+    onError: (msg: string) => void,
+  ): void {
+    // Guard: task_complete and exit can both fire — only call onDone/onError once
+    let settled = false
+    let receivedAnyChunk = false
+
+    const cleanup = () => {
+      this.runManager.removeListener('normalized', onNormalized)
+      this.runManager.removeListener('exit', onExit)
+      this.runManager.removeListener('error', onRunError)
+    }
+
+    const settle = (cb: () => void) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      cb()
+    }
+
+    const onNormalized = (requestId: string, event: NormalizedEvent) => {
+      if (requestId !== btwId) return
+      if (event.type === 'text_chunk') {
+        if (!event.parentToolUseId) {
+          receivedAnyChunk = true
+          onChunk(event.text)
+        }
+      } else if (event.type === 'task_complete') {
+        // Fallback: if the model used tools and no text was streamed incrementally,
+        // emit the final result text before signalling done.
+        if (!receivedAnyChunk && event.result) {
+          onChunk(event.result)
+        }
+        settle(() => onDone())
+      } else if (event.type === 'error') {
+        settle(() => onError(event.message))
+      }
+    }
+
+    const onExit = (requestId: string, code: number | null) => {
+      if (requestId !== btwId) return
+      settle(() => {
+        if (code !== 0 && code !== null) {
+          onError(`Process exited with code ${code}`)
+        } else {
+          onDone()
+        }
+      })
+    }
+
+    const onRunError = (requestId: string, err: Error) => {
+      if (requestId !== btwId) return
+      settle(() => onError(err.message))
+    }
+
+    this.runManager.on('normalized', onNormalized)
+    this.runManager.on('exit', onExit)
+    this.runManager.on('error', onRunError)
+
+    try {
+      this.runManager.startRun(btwId, options)
+      log(`BTW run started: ${btwId}`)
+    } catch (err) {
+      settle(() => onError((err as Error).message))
+    }
+  }
+
   // ─── Shutdown ───
 
   shutdown(): void {

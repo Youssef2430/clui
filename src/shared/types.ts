@@ -224,6 +224,21 @@ export type NormalizedEvent =
   | { type: 'usage'; usage: UsageData }
   | { type: 'permission_request'; questionId: string; toolName: string; toolDescription?: string; toolInput?: Record<string, unknown>; options: Array<{ id: string; label: string; kind?: string }> }
 
+// ─── BTW Side Question ───
+
+export interface BtwOptions {
+  btwId: string
+  question: string
+  projectPath: string
+}
+
+export interface BtwEvent {
+  btwId: string
+  type: 'chunk' | 'done' | 'error'
+  text?: string
+  errorMessage?: string
+}
+
 // ─── Run Options ───
 
 export interface RunOptions {
@@ -383,6 +398,10 @@ export const IPC = {
   MARKETPLACE_INSTALLED: 'clui:marketplace-installed',
   MARKETPLACE_INSTALL: 'clui:marketplace-install',
   MARKETPLACE_UNINSTALL: 'clui:marketplace-uninstall',
+
+  // BTW side question
+  BTW_PROMPT: 'clui:btw-prompt',
+  BTW_EVENT: 'clui:btw-event',
 
   // Permission mode
   SET_PERMISSION_MODE: 'clui:set-permission-mode',

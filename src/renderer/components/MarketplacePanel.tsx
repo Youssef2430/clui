@@ -236,7 +236,7 @@ export function MarketplacePanel() {
       </div>
 
       {/* Body */}
-      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '0 18px', scrollbarWidth: 'thin' }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '0 18px' }}>
         {loading ? (
           <LoadingState colors={colors} />
         ) : error ? (

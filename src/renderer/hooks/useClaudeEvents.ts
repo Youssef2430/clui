@@ -13,6 +13,9 @@ export function useClaudeEvents() {
   const handleNormalizedEvent = useSessionStore((s) => s.handleNormalizedEvent)
   const handleStatusChange = useSessionStore((s) => s.handleStatusChange)
   const handleError = useSessionStore((s) => s.handleError)
+  const appendBtwChunk = useSessionStore((s) => s.appendBtwChunk)
+  const setBtwDone = useSessionStore((s) => s.setBtwDone)
+  const setBtwError = useSessionStore((s) => s.setBtwError)
 
   // RAF batching for text_chunk events
   const chunkBufferRef = useRef<Map<string, string>>(new Map())
@@ -67,6 +70,16 @@ export function useClaudeEvents() {
       handleError(tabId, error)
     })
 
+    const unsubBtw = window.clui.onBtwEvent((evt) => {
+      if (evt.type === 'chunk' && evt.text) {
+        appendBtwChunk(evt.btwId, evt.text)
+      } else if (evt.type === 'done') {
+        setBtwDone(evt.btwId)
+      } else if (evt.type === 'error') {
+        setBtwError(evt.btwId, evt.errorMessage || 'Unknown error')
+      }
+    })
+
     const unsubSkill = window.clui.onSkillStatus((status) => {
       if (status.state === 'failed') {
         console.warn(`[Clui] Skill install failed: ${status.name} — ${status.error}`)
@@ -75,13 +88,14 @@ export function useClaudeEvents() {
 
     return () => {
       unsubEvent()
+      unsubBtw()
       unsubStatus()
       unsubError()
       unsubSkill()
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current)
       chunkBufferRef.current.clear()
     }
-  }, [handleNormalizedEvent, handleStatusChange, handleError])
+  }, [handleNormalizedEvent, handleStatusChange, handleError, appendBtwChunk, setBtwDone, setBtwError])
 
   // Note: window.clui.start() is called via sessionStore.initStaticInfo() in App.tsx.
   // No duplicate call needed here.

@@ -11,7 +11,7 @@ import { log as _log, LOG_FILE, flushLogs } from './logger'
 import { getCliEnv } from './cli-env'
 import { autoUpdater } from 'electron-updater'
 import { IPC } from '../shared/types'
-import type { RunOptions, NormalizedEvent, EnrichedError } from '../shared/types'
+import type { RunOptions, NormalizedEvent, EnrichedError, BtwOptions } from '../shared/types'
 
 const DEBUG_MODE = process.env.CLUI_DEBUG === '1'
 const SPACES_DEBUG = DEBUG_MODE || process.env.CLUI_SPACES_DEBUG === '1'
@@ -306,6 +306,49 @@ ipcMain.handle(IPC.PROMPT, async (_event, { tabId, requestId, options }: { tabId
   }
 })
 
+ipcMain.handle(IPC.BTW_PROMPT, async (_event, opts: BtwOptions) => {
+  log(`IPC BTW_PROMPT: btwId=${opts.btwId}`)
+
+  const BTW_SYSTEM_PROMPT = [
+    '<system-reminder>',
+    'This is a lightweight side question. Keep your answer concise.',
+    'You may use tools if truly needed, but use no more than 3 tool calls total.',
+    'Prefer answering from existing knowledge over reaching for tools.',
+    '</system-reminder>',
+  ].join(' ')
+
+  // Use a temp directory so the btw session isn't saved
+  // alongside the user's real project sessions.
+  const { mkdtempSync, rmSync } = require('fs')
+  const { tmpdir } = require('os')
+  const btwDir = mkdtempSync(join(tmpdir(), 'clui-btw-'))
+
+  const cleanupBtwDir = () => {
+    try { rmSync(btwDir, { recursive: true, force: true }) } catch {}
+    // Also remove the Claude session transcript dir that gets created under
+    // ~/.claude/projects/<encoded-btwDir>/ — these are ephemeral and would
+    // accumulate indefinitely otherwise.
+    try {
+      const encodedBtwDir = encodeProjectPath(btwDir)
+      const claudeSessionDir = join(homedir(), '.claude', 'projects', encodedBtwDir)
+      rmSync(claudeSessionDir, { recursive: true, force: true })
+    } catch {}
+  }
+
+  controlPlane.startBtwRun(
+    opts.btwId,
+    {
+      prompt: opts.question,
+      projectPath: btwDir,
+      maxTurns: 5,
+      systemPrompt: BTW_SYSTEM_PROMPT,
+    },
+    (text) => broadcast(IPC.BTW_EVENT, { btwId: opts.btwId, type: 'chunk', text }),
+    ()     => { broadcast(IPC.BTW_EVENT, { btwId: opts.btwId, type: 'done' }); cleanupBtwDir() },
+    (msg)  => { broadcast(IPC.BTW_EVENT, { btwId: opts.btwId, type: 'error', errorMessage: msg }); cleanupBtwDir() },
+  )
+})
+
 ipcMain.handle(IPC.CANCEL, (_event, requestId: string) => {
   log(`IPC CANCEL: ${requestId}`)
   return controlPlane.cancel(requestId)
@@ -447,7 +490,10 @@ ipcMain.handle(IPC.LIST_ALL_SESSIONS, async () => {
     const allSessions: Array<{ sessionId: string; slug: string | null; firstMessage: string | null; lastTimestamp: string; size: number; projectPath: string }> = []
 
     const projectDirs = readdirSync(projectsRoot).filter((d: string) => {
-      try { return statSync(join(projectsRoot, d)).isDirectory() } catch { return false }
+      try {
+        if (d.includes('clui-btw-')) return false // skip btw ephemeral sessions
+        return statSync(join(projectsRoot, d)).isDirectory()
+      } catch { return false }
     })
 
     for (const dir of projectDirs) {

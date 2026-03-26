@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clui — The better UI for Claude Code</title>
+  <meta name="description" content="A calm, floating overlay for Claude Code on macOS. Free & open source. No API key required." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ─── Nav ──────────────────────────────────────────────────── -->
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <div class="nav-logo-mark">
+          <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 7h10M7 2v10" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="nav-logo-text">Clui</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#summon">Overlay</a></li>
+        <li><a href="#permissions">Permissions</a></li>
+        <li><a href="#skills">Skills</a></li>
+        <li><a href="#install">Install</a></li>
+        <li><a href="https://github.com/Youssef2430/clui" target="_blank" rel="noopener">GitHub ↗</a></li>
+        <li>
+          <button class="theme-toggle" aria-label="Toggle theme">
+            <svg class="theme-icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="theme-icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+        </li>
+        <li><a href="#install" class="nav-cta">Download free</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ─── Hero ─────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="container">
+      <div class="reveal">
+        <div class="hero-badge">
+          <div class="hero-badge-dot"></div>
+          macOS — Free &amp; Open Source
+        </div>
+      </div>
+
+      <h1 class="hero-heading reveal reveal-delay-1">
+        The better UI<br />for <em>Claude Code</em>
+      </h1>
+
+      <p class="hero-sub reveal reveal-delay-2">
+        A calm, floating overlay that stays out of your way until you need it. No API key. No friction.
+      </p>
+
+      <div class="hero-actions reveal reveal-delay-3">
+        <a href="#install" class="btn-primary">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Install with Homebrew
+        </a>
+        <a href="https://github.com/Youssef2430/clui" target="_blank" rel="noopener" class="btn-ghost">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+          </svg>
+          View on GitHub
+        </a>
+      </div>
+
+      <p class="hero-meta reveal reveal-delay-4">
+        <span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+          Takes 30 seconds to install
+        </span>
+        &nbsp;&nbsp;&middot;&nbsp;&nbsp;
+        <span>macOS 13+ required</span>
+        &nbsp;&nbsp;&middot;&nbsp;&nbsp;
+        <span>Requires Claude Code CLI</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- ─── Hero Demo — Floating App Screenshot ─────────────────── -->
+  <section class="hero-demo-section">
+    <div class="container">
+      <div class="hero-demo-frame reveal">
+        <div class="demo-float">
+          <!-- Placeholder for sizing -->
+          <img src="clui-light.png" alt="" class="demo-img-placeholder" />
+          <!-- Actual images — crossfade with page theme -->
+          <img src="clui-light.png" alt="Clui in light mode — floating overlay for Claude Code" class="demo-img-light" />
+          <img src="clui-dark.png" alt="Clui in dark mode — floating overlay for Claude Code" class="demo-img-dark" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" style="margin-top:80px;" />
+
+  <!-- ─── Section: Summon Anywhere ─────────────────────────────── -->
+  <section class="split-section" id="summon">
+    <div class="container">
+      <div class="split-inner">
+        <!-- Text left -->
+        <div class="split-text reveal">
+          <div class="section-label">The Overlay</div>
+          <h2 class="section-heading">Press two keys.<br />Claude appears.</h2>
+          <p class="section-sub">
+            Option+Space summons Clui above every window, every app, wherever you are. Same shortcut sends it away. It leaves no trace — no dock icon, no menu clutter.
+          </p>
+        </div>
+        <!-- Visual right -->
+        <div class="split-visual reveal reveal-delay-2" id="kbdVisual">
+          <div class="kbd-showcase">
+            <div class="kbd-row">
+              <div class="kbd-key key-option" id="kbdOption">&#x2325;</div>
+              <span class="kbd-plus-lg">+</span>
+              <div class="kbd-key key-space" id="kbdSpace">Space</div>
+            </div>
+            <div class="kbd-hint">Option + Space</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ─── Section: Every Tool, Approved ────────────────────────── -->
+  <section class="split-section" id="permissions">
+    <div class="container">
+      <div class="split-inner reversed">
+        <!-- Text right (reversed grid) -->
+        <div class="split-text reveal">
+          <div class="section-label">Permissions</div>
+          <h2 class="section-heading">Every action,<br />your approval.</h2>
+          <p class="section-sub">
+            Clui intercepts every write, delete, and shell command before it touches your system. Review it, approve it, or deny it in one click. Set permanent rules per project so trusted operations never interrupt you again.
+          </p>
+        </div>
+        <!-- Visual left (reversed grid) -->
+        <div class="split-visual reveal reveal-delay-2">
+          <div class="perm-card-showcase">
+            <div class="perm-card-header">
+              <div class="perm-card-icon-wrap">&#x26A0;&#xFE0F;</div>
+              <div>
+                <div class="perm-card-title">Permission Required</div>
+                <div class="perm-card-subtitle">Claude wants to write a file</div>
+              </div>
+            </div>
+            <div class="perm-card-path">
+              <span class="perm-card-path-icon">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+              </span>
+              src/auth.ts
+            </div>
+            <div class="perm-card-actions">
+              <button class="perm-card-btn perm-card-btn-allow">Allow</button>
+              <button class="perm-card-btn perm-card-btn-deny">Deny</button>
+            </div>
+            <div class="perm-card-note">Always allow for this project &rarr;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ─── Section: Your Skills, Your Way ───────────────────────── -->
+  <section class="split-section" id="skills">
+    <div class="container">
+      <div class="split-inner">
+        <!-- Text left -->
+        <div class="split-text reveal">
+          <div class="section-label">Skills Marketplace</div>
+          <h2 class="section-heading">Your workflows,<br />packaged as skills.</h2>
+          <p class="section-sub">
+            Browse the community marketplace or author your own. Git flows, code review prompts, deploy scripts, test runners — all accessible as slash commands the moment they're installed.
+          </p>
+        </div>
+        <!-- Visual right -->
+        <div class="split-visual reveal reveal-delay-2">
+          <div class="skills-showcase">
+            <div class="skill-tile">
+              <div class="skill-tile-top">
+                <div class="skill-tile-dot"></div>
+                <div class="skill-tile-badge">Installed</div>
+              </div>
+              <div class="skill-tile-name">git-flow</div>
+              <div class="skill-tile-desc">Branch, commit &amp; PR workflows</div>
+            </div>
+            <div class="skill-tile">
+              <div class="skill-tile-top">
+                <div class="skill-tile-dot"></div>
+                <div class="skill-tile-badge">Installed</div>
+              </div>
+              <div class="skill-tile-name">code-review</div>
+              <div class="skill-tile-desc">Inline suggestions &amp; scoring</div>
+            </div>
+            <div class="skill-tile">
+              <div class="skill-tile-top">
+                <div class="skill-tile-dot"></div>
+                <div class="skill-tile-badge">Installed</div>
+              </div>
+              <div class="skill-tile-name">deploy</div>
+              <div class="skill-tile-desc">One-command staging &amp; prod push</div>
+            </div>
+            <div class="skill-tile">
+              <div class="skill-tile-top">
+                <div class="skill-tile-dot"></div>
+                <div class="skill-tile-badge">Installed</div>
+              </div>
+              <div class="skill-tile-name">test-runner</div>
+              <div class="skill-tile-desc">Run &amp; interpret test suites</div>
+            </div>
+            <div class="skill-tile" style="opacity:.45;">
+              <div class="skill-tile-top">
+                <div class="skill-tile-dot" style="background:var(--border);"></div>
+                <div class="skill-tile-badge" style="background:transparent;color:var(--text-soft);border:1px solid var(--border);">Available</div>
+              </div>
+              <div class="skill-tile-name" style="color:var(--text-mid);">docs-writer</div>
+              <div class="skill-tile-desc">Auto-generate README &amp; JSDoc</div>
+            </div>
+            <div class="skill-tile" style="opacity:.45;">
+              <div class="skill-tile-top">
+                <div class="skill-tile-dot" style="background:var(--border);"></div>
+                <div class="skill-tile-badge" style="background:transparent;color:var(--text-soft);border:1px solid var(--border);">Available</div>
+              </div>
+              <div class="skill-tile-name" style="color:var(--text-mid);">db-migrate</div>
+              <div class="skill-tile-desc">Schema diffs &amp; safe migrations</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ─── Section: Speak Naturally ─────────────────────────────── -->
+  <section class="split-section" id="voice">
+    <div class="container">
+      <div class="split-inner reversed">
+        <!-- Text right (reversed) -->
+        <div class="split-text reveal">
+          <div class="section-label">Voice Input</div>
+          <h2 class="section-heading">Speak your intent.<br />Claude listens.</h2>
+          <p class="section-sub">
+            Activate voice mode and dictate naturally. Clui transcribes in real time and sends your message the moment you stop speaking. Ideal for long prompts, fast ideas, and hands-free workflows.
+          </p>
+        </div>
+        <!-- Visual left (reversed) -->
+        <div class="split-visual reveal reveal-delay-2">
+          <div class="voice-showcase">
+            <div class="voice-waveform">
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+              <div class="voice-wv-bar"></div>
+            </div>
+            <div class="voice-label">
+              <div class="voice-label-dot"></div>
+              Listening&hellip;
+            </div>
+            <div class="voice-transcript">
+              "Refactor the login flow to use refresh tokens and update the middleware to validate expiry on every request."
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ─── Features List ─────────────────────────────────────────── -->
+  <section class="features-list-section" id="features">
+    <div class="container">
+      <div class="features-list-header reveal">
+        <div class="section-label">Everything else</div>
+        <h2 class="section-heading">Built to go the distance.</h2>
+        <p class="section-sub" style="max-width:460px;">Every detail has earned its place. Nothing shipped until it felt right.</p>
+      </div>
+
+      <div class="features-list">
+
+        <div class="feature-row reveal reveal-delay-1">
+          <div class="feature-row-icon">
+            <svg viewBox="0 0 24 24">
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <path d="M8 4v16"/>
+              <path d="M2 9h6"/>
+            </svg>
+          </div>
+          <div class="feature-row-name">Multi-tab sessions</div>
+          <div class="feature-row-desc">Run independent Claude conversations in parallel. Switch contexts instantly without losing any thread or history.</div>
+        </div>
+
+        <div class="feature-row reveal reveal-delay-2">
+          <div class="feature-row-icon">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 7v5l3 3"/>
+            </svg>
+          </div>
+          <div class="feature-row-name">Dual theme</div>
+          <div class="feature-row-desc">Light and dark modes crafted with the same care. Follows your system setting automatically, or pin your preference.</div>
+        </div>
+
+        <div class="feature-row reveal reveal-delay-3">
+          <div class="feature-row-icon">
+            <svg viewBox="0 0 24 24">
+              <polyline points="16 3 21 3 21 8"/>
+              <line x1="4" y1="20" x2="21" y2="3"/>
+              <polyline points="21 16 21 21 16 21"/>
+              <line x1="15" y1="15" x2="21" y2="21"/>
+            </svg>
+          </div>
+          <div class="feature-row-name">Auto-updater</div>
+          <div class="feature-row-desc">Updates ship silently in the background. You always have the latest without ever thinking about it.</div>
+        </div>
+
+        <div class="feature-row reveal reveal-delay-1">
+          <div class="feature-row-icon">
+            <svg viewBox="0 0 24 24">
+              <line x1="4" y1="6" x2="20" y2="6"/>
+              <line x1="4" y1="12" x2="16" y2="12"/>
+              <line x1="4" y1="18" x2="7" y2="18"/>
+              <path d="M17 15l2 2 4-4"/>
+            </svg>
+          </div>
+          <div class="feature-row-name">Slash commands</div>
+          <div class="feature-row-desc">Type / to surface your full skill library. Run complex workflows with a single keystroke.</div>
+        </div>
+
+        <div class="feature-row reveal reveal-delay-2">
+          <div class="feature-row-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </div>
+          <div class="feature-row-name">File &amp; screenshot attach</div>
+          <div class="feature-row-desc">Drag-drop files or capture a screen region directly into any message. Claude sees exactly what you see.</div>
+        </div>
+
+        <div class="feature-row reveal reveal-delay-3">
+          <div class="feature-row-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M9 12l2 2 4-4"/>
+              <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.5 0 2.91.37 4.16 1.02"/>
+            </svg>
+          </div>
+          <div class="feature-row-name">No API key needed</div>
+          <div class="feature-row-desc">Clui uses your existing Claude Code CLI authentication. If Claude Code works, Clui works — immediately.</div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ─── Install ────────────────────────────────────────────────── -->
+  <section class="install-section" id="install">
+    <div class="container">
+      <div class="reveal">
+        <div class="section-label">Get started</div>
+        <h2 class="section-heading">Up in 30 seconds.</h2>
+        <p class="section-sub">Install via Homebrew — the same way you install everything else on your Mac.</p>
+      </div>
+
+      <div class="terminal reveal reveal-delay-1" id="installTerminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot terminal-dot-red"></div>
+          <div class="terminal-dot terminal-dot-yellow"></div>
+          <div class="terminal-dot terminal-dot-green"></div>
+          <div class="terminal-title">Terminal — zsh</div>
+        </div>
+        <div class="terminal-body">
+          <button class="terminal-restart" aria-label="Replay animation">
+            <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            Replay
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ─── Callout ────────────────────────────────────────────────── -->
+  <section class="callout-section">
+    <div class="container">
+      <div class="callout-inner reveal">
+        <div class="callout-eyebrow">Free &amp; Open Source</div>
+        <h2 class="callout-heading">Your terminal just got a window.</h2>
+        <p class="callout-sub">No subscription. No API key. No drama.<br/>Just a quieter way to work with Claude.</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <a href="#install" class="btn-primary">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Install free
+          </a>
+          <a href="https://github.com/Youssef2430/clui" target="_blank" rel="noopener" class="btn-ghost">
+            Star on GitHub ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ─── Footer ────────────────────────────────────────────────── -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-left">
+          <a href="#" class="footer-brand">
+            <div class="footer-logo-mark">
+              <svg viewBox="0 0 14 14" fill="none">
+                <path d="M2 7h10M7 2v10" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <span class="footer-brand-text">Clui</span>
+          </a>
+          <span class="footer-copy">&copy; 2026 &middot; macOS only &middot; MIT License</span>
+        </div>
+        <ul class="footer-links">
+          <li><a href="https://github.com/Youssef2430/clui" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/Youssef2430/clui/releases" target="_blank" rel="noopener">Releases</a></li>
+          <li><a href="https://github.com/Youssef2430/clui/issues" target="_blank" rel="noopener">Issues</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

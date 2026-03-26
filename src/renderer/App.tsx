@@ -6,6 +6,7 @@ import { ConversationView } from './components/ConversationView'
 import { InputBar, type InputBarHandle } from './components/InputBar'
 import { StatusBar } from './components/StatusBar'
 import { MarketplacePanel } from './components/MarketplacePanel'
+import { BtwBubble } from './components/BtwBubble'
 import { PopoverLayerProvider } from './components/PopoverLayer'
 import { useClaudeEvents } from './hooks/useClaudeEvents'
 import { useHealthReconciliation } from './hooks/useHealthReconciliation'
@@ -226,6 +227,9 @@ export default function App() {
               </div>
             </motion.div>
           </motion.div>
+
+          {/* ─── BTW side question bubble ─── */}
+          <BtwBubble />
 
           {/* ─── Input row — circles float outside left ─── */}
           {/* marginBottom: shadow buffer so the glass-surface drop shadow isn't clipped at the native window edge */}

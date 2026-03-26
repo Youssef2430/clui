@@ -57,6 +57,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
   }), [])
 
   const sendMessage = useSessionStore((s) => s.sendMessage)
+  const submitBtw = useSessionStore((s) => s.submitBtw)
   const clearTab = useSessionStore((s) => s.clearTab)
   const addSystemMessage = useSessionStore((s) => s.addSystemMessage)
   const addAttachments = useSessionStore((s) => s.addAttachments)
@@ -411,6 +412,12 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
   }, [tab, clearTab, addSystemMessage, staticInfo, preferredModel])
 
   const handleSlashSelect = useCallback((cmd: SlashCommand) => {
+    if (cmd.command === '/btw') {
+      setInput('/btw ')
+      setSlashFilter(null)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+      return
+    }
     const isSkillCommand = !!tab?.sessionSkills?.includes(cmd.command.replace(/^\//, ''))
     if (isSkillCommand) {
       setInput(`${cmd.command} `)
@@ -451,6 +458,22 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
       }
       return
     }
+    // ─── /btw interception ───
+    if (/^\/btw(\s|$)/i.test(prompt)) {
+      const question = prompt.replace(/^\/btw\s*/i, '').trim()
+      if (!question) {
+        // User submitted /btw with no question — prompt them to add one
+        setInput('/btw ')
+        requestAnimationFrame(() => textareaRef.current?.focus())
+        return
+      }
+      setInput('')
+      setSlashFilter(null)
+      submitBtw(question)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+      return
+    }
+
     if (!prompt && attachments.length === 0) return
     if (isConnecting) return
     setInput('')
