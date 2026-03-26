@@ -25,10 +25,10 @@ It's a lightweight, transparent desktop overlay for [Claude Code](https://docs.a
 
 ### Website
 
-Visit **[clui.app](https://clui.app)** to install via Homebrew or download the `.dmg` directly — it auto-detects your Mac's architecture.
+Visit **[clui.app](https://clui.app)** to install via Homebrew or download the `.dmg` directly, it auto-detects your Mac's architecture.
 
 <a href="https://clui.app">
-  <img src="resources/web-preview.png" alt="Clui website" width="600" />
+  <img src="resources/homepage.jpeg" alt="Clui website" width="600" />
 </a>
 
 ### Homebrew
