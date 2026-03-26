@@ -1,0 +1,9 @@
+# Next.js
+.next/
+out/
+node_modules/
+*.tsbuildinfo
+
+# Misc
+.DS_Store
+*.log
