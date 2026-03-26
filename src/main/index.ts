@@ -311,10 +311,9 @@ ipcMain.handle(IPC.BTW_PROMPT, async (_event, opts: BtwOptions) => {
 
   const BTW_SYSTEM_PROMPT = [
     '<system-reminder>',
-    'Answer this side question immediately without using any tools.',
-    'Base your response only on what you already know.',
-    'If you would need a tool to answer, just say so briefly.',
-    'Keep your answer concise.',
+    'This is a lightweight side question. Keep your answer concise.',
+    'You may use tools if truly needed, but use no more than 3 tool calls total.',
+    'Prefer answering from existing knowledge over reaching for tools.',
     '</system-reminder>',
   ].join(' ')
 
@@ -326,6 +325,14 @@ ipcMain.handle(IPC.BTW_PROMPT, async (_event, opts: BtwOptions) => {
 
   const cleanupBtwDir = () => {
     try { rmSync(btwDir, { recursive: true, force: true }) } catch {}
+    // Also remove the Claude session transcript dir that gets created under
+    // ~/.claude/projects/<encoded-btwDir>/ — these are ephemeral and would
+    // accumulate indefinitely otherwise.
+    try {
+      const encodedBtwDir = encodeProjectPath(btwDir)
+      const claudeSessionDir = join(homedir(), '.claude', 'projects', encodedBtwDir)
+      rmSync(claudeSessionDir, { recursive: true, force: true })
+    } catch {}
   }
 
   controlPlane.startBtwRun(

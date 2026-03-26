@@ -225,7 +225,7 @@ export function BtwBubble() {
             {/* Dismiss hint */}
             {(btwState.status === 'done' || btwState.status === 'error') && (
               <div style={{ marginTop: 6, fontSize: 10, color: colors.textTertiary, opacity: 0.7 }}>
-                Press any key to dismiss
+                Press Esc, Enter, or Space to dismiss
               </div>
             )}
           </div>

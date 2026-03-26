@@ -459,16 +459,19 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
       return
     }
     // ─── /btw interception ───
-    const btwMatch = prompt.match(/^\/btw\s+(.+)/s)
-    if (btwMatch) {
-      const question = btwMatch[1].trim()
-      if (question) {
-        setInput('')
-        setSlashFilter(null)
-        submitBtw(question)
+    if (/^\/btw(\s|$)/i.test(prompt)) {
+      const question = prompt.replace(/^\/btw\s*/i, '').trim()
+      if (!question) {
+        // User submitted /btw with no question — prompt them to add one
+        setInput('/btw ')
         requestAnimationFrame(() => textareaRef.current?.focus())
         return
       }
+      setInput('')
+      setSlashFilter(null)
+      submitBtw(question)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+      return
     }
 
     if (!prompt && attachments.length === 0) return
