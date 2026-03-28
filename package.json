@@ -13,7 +13,7 @@
   "homepage": "https://github.com/Youssef2430/clui#readme",
   "main": "dist/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "unset ELECTRON_RUN_AS_NODE && electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "electron-vite build --mode production && electron-builder --mac --dir",
@@ -25,9 +25,12 @@
     "@phosphor-icons/react": "^2.1.10",
     "electron-updater": "^6.8.3",
     "framer-motion": "^12.35.1",
+    "katex": "^0.16.43",
     "node-pty": "^1.1.0",
     "react-markdown": "^9.0.0",
+    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.0",
+    "remark-math": "^6.0.0",
     "zustand": "^5.0.0"
   },
   "build": {
@@ -53,11 +56,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ],
       "entitlements": "resources/entitlements.mac.plist",

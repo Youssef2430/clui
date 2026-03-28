@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import {
   FileText, PencilSimple, FileArrowUp, Terminal, MagnifyingGlass, Globe,
   Robot, Question, Wrench, FolderOpen, Copy, Check, CaretRight, CaretDown,
@@ -20,7 +22,23 @@ import type { Message } from '../../shared/types'
 
 const INITIAL_RENDER_CAP = 100
 const PAGE_SIZE = 100
-const REMARK_PLUGINS = [remarkGfm] // Hoisted — prevents re-parse on every render
+const REMARK_PLUGINS = [remarkGfm, remarkMath] // Hoisted — prevents re-parse on every render
+const REHYPE_PLUGINS = [rehypeKatex]
+
+// Minimal link override for Markdown surfaces without full markdownComponents:
+// prevents default <a> navigation (which would leave the Electron window)
+// and instead opens links externally via the IPC bridge.
+const SAFE_LINK_COMPONENTS = {
+  a: ({ href, children }: any) => (
+    <button
+      type="button"
+      className="underline decoration-dotted underline-offset-2 cursor-pointer"
+      onClick={() => { if (href) window.clui.openExternal(String(href)) }}
+    >
+      {children}
+    </button>
+  ),
+}
 
 // ─── Types ───
 
@@ -588,7 +606,7 @@ const AssistantMessage = React.memo(function AssistantMessage({
   const inner = (
     <div className="group/msg relative">
       <div className="text-[13px] leading-[1.6] prose-cloud min-w-0 max-w-[92%]">
-        <Markdown remarkPlugins={REMARK_PLUGINS} components={markdownComponents}>
+        <Markdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={markdownComponents}>
           {message.content}
         </Markdown>
       </div>
@@ -759,7 +777,7 @@ function ToolResultAccordion({ tool }: { tool: Message }) {
                 <span style={{ color: colors.textTertiary }}>Loading...</span>
               )}
               {hasResult && (
-                <Markdown remarkPlugins={REMARK_PLUGINS}>{tool.toolResult!}</Markdown>
+                <Markdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={SAFE_LINK_COMPONENTS}>{tool.toolResult!}</Markdown>
               )}
               {!loading && !hasResult && (
                 <span style={{ color: colors.textTertiary }}>No result data available</span>
