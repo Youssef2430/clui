@@ -58,7 +58,7 @@ export interface CluiAPI {
   /** Hide the snap grid overlay window */
   hideSnapGrid(): void
   /** Update which snap zone is highlighted in the grid */
-  updateSnapZone(zone: string): void
+  updateSnapZone(zone: 'left' | 'center' | 'right'): void
 
   // ─── Event listeners (main → renderer) ───
   onEvent(callback: (tabId: string, event: NormalizedEvent) => void): () => void

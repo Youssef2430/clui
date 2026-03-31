@@ -10,7 +10,7 @@ import { fetchCatalog, listInstalled, installPlugin, uninstallPlugin } from './m
 import { log as _log, LOG_FILE, flushLogs } from './logger'
 import { getCliEnv } from './cli-env'
 import { autoUpdater } from 'electron-updater'
-import { IPC } from '../shared/types'
+import { IPC, OVERLAY_BAR_WIDTH, OVERLAY_PILL_HEIGHT, OVERLAY_PILL_BOTTOM_MARGIN } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, BtwOptions } from '../shared/types'
 
 const DEBUG_MODE = process.env.CLUI_DEBUG === '1'
@@ -50,17 +50,16 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:transparent}
   <div class="hlines" id="hl"></div>
 </div>
 <script>
-const{ipcRenderer}=require('electron');
 const w=document.getElementById('w');
 const z={left:document.getElementById('left'),center:document.getElementById('center'),right:document.getElementById('right')};
 const hlc=document.getElementById('hl');
 const ROWS=6;
 for(let i=1;i<ROWS;i++){const d=document.createElement('div');d.className='hl';d.style.top=(100*i/ROWS)+'%';hlc.appendChild(d);}
 requestAnimationFrame(()=>w.classList.add('visible'));
-ipcRenderer.on('zone',(_,zone)=>{
+window.setSnapZone=function(zone){
   Object.values(z).forEach(el=>el.classList.remove('active'));
   if(z[zone])z[zone].classList.add('active');
-});
+};
 </script></body></html>`
 
 // Feature flag: enable PTY interactive permissions transport
@@ -70,9 +69,10 @@ const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 
 // Keep native width fixed to avoid renderer animation vs setBounds race.
 // The UI itself still launches in compact mode; extra width is transparent/click-through.
-const BAR_WIDTH = 1040
-const PILL_HEIGHT = 720  // Fixed native window height — extra room for expanded UI + shadow buffers
-const PILL_BOTTOM_MARGIN = 24
+// Values are imported from shared/types to stay in sync with the renderer.
+const BAR_WIDTH = OVERLAY_BAR_WIDTH
+const PILL_HEIGHT = OVERLAY_PILL_HEIGHT       // Fixed native window height — extra room for expanded UI + shadow buffers
+const PILL_BOTTOM_MARGIN = OVERLAY_PILL_BOTTOM_MARGIN
 
 // ─── Broadcast to renderer ───
 
@@ -214,12 +214,36 @@ function resetWindowPosition(): void {
   lastWindowBounds = mainWindow.getBounds()
 }
 
+/** Clamp saved bounds to a valid display work area so the window is never unreachable. */
+function clampBoundsToDisplay(bounds: Electron.Rectangle): Electron.Rectangle {
+  const displays = screen.getAllDisplays()
+  // Find the display whose center is closest to the saved bounds center
+  const cx = bounds.x + bounds.width / 2
+  const cy = bounds.y + bounds.height / 2
+  let best = displays[0]
+  let bestDist = Infinity
+  for (const d of displays) {
+    const dcx = d.workArea.x + d.workArea.width / 2
+    const dcy = d.workArea.y + d.workArea.height / 2
+    const dist = Math.abs(cx - dcx) + Math.abs(cy - dcy)
+    if (dist < bestDist) { bestDist = dist; best = d }
+  }
+  const wa = best.workArea
+  return {
+    x: Math.max(wa.x, Math.min(bounds.x, wa.x + wa.width - bounds.width)),
+    y: Math.max(wa.y, Math.min(bounds.y, wa.y + wa.height - bounds.height)),
+    width: bounds.width,
+    height: bounds.height,
+  }
+}
+
 function showWindow(source = 'unknown'): void {
   if (!mainWindow) return
   const toggleId = ++toggleSequence
 
   if (lastWindowBounds) {
-    mainWindow.setBounds(lastWindowBounds)
+    // Clamp before applying — display config may have changed (monitor disconnected, scaling changed)
+    mainWindow.setBounds(clampBoundsToDisplay(lastWindowBounds))
   }
 
   // Always re-assert space membership — the flag can be lost after hide/show cycles
@@ -236,7 +260,7 @@ function showWindow(source = 'unknown'): void {
   // without deactivating the active app — hover preserved everywhere.
   mainWindow.show()
   if (lastWindowBounds) {
-    mainWindow.setBounds(lastWindowBounds)
+    mainWindow.setBounds(clampBoundsToDisplay(lastWindowBounds))
   }
   mainWindow.webContents.focus()
   broadcast(IPC.WINDOW_SHOWN)
@@ -329,8 +353,8 @@ function getOrCreateGridWindow(): BrowserWindow {
     focusable: false,
     show: false,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   })
   gridWindow.setIgnoreMouseEvents(true)
@@ -354,9 +378,11 @@ ipcMain.on(IPC.HIDE_SNAP_GRID, () => {
   }
 })
 
-ipcMain.on(IPC.UPDATE_SNAP_ZONE, (_, zone: string) => {
+ipcMain.on(IPC.UPDATE_SNAP_ZONE, (_, zone: 'left' | 'center' | 'right') => {
   if (gridWindow && !gridWindow.isDestroyed() && gridWindow.isVisible()) {
-    gridWindow.webContents.send('zone', zone)
+    gridWindow.webContents
+      .executeJavaScript(`window.setSnapZone && window.setSnapZone(${JSON.stringify(zone)})`)
+      .catch(() => {})
   }
 })
 

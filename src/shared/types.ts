@@ -331,6 +331,13 @@ export interface CatalogPlugin {
   isSkillMd: boolean      // true = individual SKILL.md (direct install), false = CLI plugin (bundle install)
 }
 
+// ─── Overlay Window Geometry Constants ───
+// Single source of truth shared between main and renderer to prevent snap/clamp drift.
+
+export const OVERLAY_BAR_WIDTH = 1040
+export const OVERLAY_PILL_HEIGHT = 720
+export const OVERLAY_PILL_BOTTOM_MARGIN = 24
+
 // ─── IPC Channel Names ───
 
 export const IPC = {

@@ -13,6 +13,7 @@ import { useHealthReconciliation } from './hooks/useHealthReconciliation'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useSessionStore } from './stores/sessionStore'
 import { useColors, useThemeStore, spacing } from './theme'
+import { OVERLAY_BAR_WIDTH, OVERLAY_PILL_HEIGHT, OVERLAY_PILL_BOTTOM_MARGIN } from '../shared/types'
 
 const TRANSITION = { duration: 0.26, ease: [0.4, 0, 0.1, 1] as const }
 
@@ -74,19 +75,19 @@ export default function App() {
 
   // Shared drag ref — must be declared before the setIgnoreMouseEvents effect so both closures can read it
   const dragRef = useRef<{ startX: number; startY: number } | null>(null)
+  // RAF handle and pending delta accumulator for IPC throttling during drag
+  const dragRAFRef = useRef<number | null>(null)
+  const pendingDeltaRef = useRef({ dx: 0, dy: 0 })
 
   // Vertical position tracking — window moves first (until macOS clamps it), then CSS overflows
-  const PILL_HEIGHT_CONST = 720
-  const PILL_BOTTOM_MARGIN_CONST = 24
   const minWindowY = window.screen.availTop   // top of work area (below menu bar)
-  const initialWindowY = window.screen.availTop + window.screen.availHeight - PILL_HEIGHT_CONST - PILL_BOTTOM_MARGIN_CONST
+  const initialWindowY = window.screen.availTop + window.screen.availHeight - OVERLAY_PILL_HEIGHT - OVERLAY_PILL_BOTTOM_MARGIN
   const windowYRef = useRef(initialWindowY)
   const cardYRef = useRef(0) // CSS translateY offset (only used after window hits its y constraint)
 
   // Horizontal snap tracking
-  const BAR_WIDTH_CONST = 1040
   const windowXRef = useRef(
-    window.screen.availLeft + Math.round((window.screen.availWidth - BAR_WIDTH_CONST) / 2)
+    window.screen.availLeft + Math.round((window.screen.availWidth - OVERLAY_BAR_WIDTH) / 2)
   )
   const snapGridRef = useRef<HTMLDivElement>(null)
 
@@ -135,7 +136,7 @@ export default function App() {
     const getSnapZone = (windowX: number): 'left' | 'center' | 'right' => {
       const availLeft = window.screen.availLeft
       const availWidth = window.screen.availWidth
-      const cardCenter = windowX + BAR_WIDTH_CONST / 2
+      const cardCenter = windowX + OVERLAY_BAR_WIDTH / 2
       if (cardCenter < availLeft + availWidth / 3) return 'left'
       if (cardCenter > availLeft + (availWidth * 2) / 3) return 'right'
       return 'center'
@@ -145,11 +146,63 @@ export default function App() {
       const availLeft = window.screen.availLeft
       const availWidth = window.screen.availWidth
       if (zone === 'left') return availLeft
-      if (zone === 'right') return availLeft + availWidth - BAR_WIDTH_CONST
-      return availLeft + Math.round((availWidth - BAR_WIDTH_CONST) / 2)
+      if (zone === 'right') return availLeft + availWidth - OVERLAY_BAR_WIDTH
+      return availLeft + Math.round((availWidth - OVERLAY_BAR_WIDTH) / 2)
+    }
+
+    // RAF-batched drag processor — runs once per animation frame during drags
+    const processDrag = () => {
+      dragRAFRef.current = null
+      if (!dragRef.current) return
+      const { dx, dy } = pendingDeltaRef.current
+      pendingDeltaRef.current = { dx: 0, dy: 0 }
+      if (dx === 0 && dy === 0) return
+
+      // Horizontal: always native window movement (full screen width range)
+      if (dx !== 0) {
+        window.clui.startWindowDrag(dx, 0)
+        windowXRef.current += dx
+        const zone = getSnapZone(windowXRef.current)
+        if (snapGridRef.current) {
+          snapGridRef.current.dataset.zone = zone
+        }
+        window.clui.updateSnapZone(zone)
+      }
+
+      // Vertical: move window first (until macOS y constraint), then CSS within window
+      if (dy !== 0) {
+        if (dy < 0) {
+          // Moving up — window first, then CSS overflow
+          const windowCanMove = windowYRef.current - minWindowY
+          const windowDy = Math.max(-windowCanMove, dy)
+          const cssDy = dy - windowDy
+          if (windowDy !== 0) {
+            window.clui.startWindowDrag(0, windowDy)
+            windowYRef.current += windowDy
+          }
+          if (cssDy !== 0) {
+            cardYRef.current += cssDy
+            document.documentElement.style.setProperty('--clui-card-y', `${cardYRef.current}px`)
+          }
+        } else {
+          // Moving down — undo CSS first, then move window
+          const cssUndo = Math.min(-cardYRef.current, dy)
+          const windowDy = dy - cssUndo
+          if (cssUndo !== 0) {
+            cardYRef.current += cssUndo
+            document.documentElement.style.setProperty('--clui-card-y', `${cardYRef.current}px`)
+          }
+          if (windowDy !== 0) {
+            window.clui.startWindowDrag(0, windowDy)
+            windowYRef.current += windowDy
+          }
+        }
+      }
     }
 
     const onMouseDown = (e: MouseEvent) => {
+      // Only respond to primary (left) button — prevent accidental drags from right/middle clicks
+      if (e.button !== 0) return
       const el = e.target as HTMLElement
       // Skip interactive elements — everything else on the card is draggable
       if (el.closest('button, input, textarea, a, select, [role="button"], [contenteditable], .cm-editor')) return
@@ -159,7 +212,7 @@ export default function App() {
       if (e.detail >= 2) {
         window.clui.resetWindowPosition()
         windowYRef.current = initialWindowY
-        windowXRef.current = window.screen.availLeft + Math.round((window.screen.availWidth - BAR_WIDTH_CONST) / 2)
+        windowXRef.current = window.screen.availLeft + Math.round((window.screen.availWidth - OVERLAY_BAR_WIDTH) / 2)
         cardYRef.current = 0
         document.documentElement.style.setProperty('--clui-card-y', '0px')
         return
@@ -181,55 +234,25 @@ export default function App() {
       if (!dragRef.current) return
       const dx = e.screenX - dragRef.current.startX
       const dy = e.screenY - dragRef.current.startY
-      if (dx !== 0 || dy !== 0) {
-        // Horizontal: always native window movement (full screen width range)
-        if (dx !== 0) {
-          window.clui.startWindowDrag(dx, 0)
-          windowXRef.current += dx
-          const zone = getSnapZone(windowXRef.current)
-          // Update dots indicator
-          if (snapGridRef.current) {
-            snapGridRef.current.dataset.zone = zone
-          }
-          // Update full-screen grid overlay
-          window.clui.updateSnapZone(zone)
-        }
-        // Vertical: move window first (until macOS y constraint), then CSS within window
-        if (dy !== 0) {
-          if (dy < 0) {
-            // Moving up — window first, then CSS overflow
-            const windowCanMove = windowYRef.current - minWindowY
-            const windowDy = Math.max(-windowCanMove, dy)
-            const cssDy = dy - windowDy
-            if (windowDy !== 0) {
-              window.clui.startWindowDrag(0, windowDy)
-              windowYRef.current += windowDy
-            }
-            if (cssDy !== 0) {
-              cardYRef.current += cssDy
-              document.documentElement.style.setProperty('--clui-card-y', `${cardYRef.current}px`)
-            }
-          } else {
-            // Moving down — undo CSS first, then move window
-            const cssUndo = Math.min(-cardYRef.current, dy)
-            const windowDy = dy - cssUndo
-            if (cssUndo !== 0) {
-              cardYRef.current += cssUndo
-              document.documentElement.style.setProperty('--clui-card-y', `${cardYRef.current}px`)
-            }
-            if (windowDy !== 0) {
-              window.clui.startWindowDrag(0, windowDy)
-              windowYRef.current += windowDy
-            }
-          }
-        }
-        dragRef.current.startX = e.screenX
-        dragRef.current.startY = e.screenY
+      // Accumulate deltas and update start position immediately for correct per-frame accounting
+      dragRef.current.startX = e.screenX
+      dragRef.current.startY = e.screenY
+      pendingDeltaRef.current.dx += dx
+      pendingDeltaRef.current.dy += dy
+      // Coalesce IPC calls to one per animation frame — prevents high IPC rate on fast mousemove
+      if (dragRAFRef.current === null) {
+        dragRAFRef.current = requestAnimationFrame(processDrag)
       }
     }
 
-    const onMouseUp = () => {
+    const onMouseUp = (e: MouseEvent) => {
       if (dragRef.current) {
+        // Cancel any pending RAF and discard accumulated delta — mouseup ends the drag
+        if (dragRAFRef.current !== null) {
+          cancelAnimationFrame(dragRAFRef.current)
+          dragRAFRef.current = null
+          pendingDeltaRef.current = { dx: 0, dy: 0 }
+        }
         // Snap window to nearest horizontal zone
         const zone = getSnapZone(windowXRef.current)
         const targetX = getSnapTargetX(zone)
@@ -243,8 +266,20 @@ export default function App() {
           snapGridRef.current.style.opacity = '0'
         }
         window.clui.hideSnapGrid()
+
+        dragRef.current = null
+
+        // Restore setIgnoreMouseEvents based on the element under the cursor at release.
+        // Without this, releasing over a transparent region leaves the window intercepting
+        // clicks until the next mousemove event fires.
+        const el = document.elementFromPoint(e.clientX, e.clientY)
+        const isUI = !!(el && el.closest('[data-clui-ui]'))
+        if (!isUI) {
+          window.clui.setIgnoreMouseEvents(true, { forward: true })
+        } else {
+          window.clui.setIgnoreMouseEvents(false)
+        }
       }
-      dragRef.current = null
     }
 
     document.addEventListener('mousedown', onMouseDown)
@@ -254,6 +289,7 @@ export default function App() {
       document.removeEventListener('mousedown', onMouseDown)
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
+      if (dragRAFRef.current !== null) cancelAnimationFrame(dragRAFRef.current)
     }
   }, [])
 
