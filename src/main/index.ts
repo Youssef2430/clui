@@ -10,7 +10,7 @@ import { fetchCatalog, listInstalled, installPlugin, uninstallPlugin } from './m
 import { log as _log, LOG_FILE, flushLogs } from './logger'
 import { getCliEnv } from './cli-env'
 import { autoUpdater } from 'electron-updater'
-import { IPC } from '../shared/types'
+import { IPC, OVERLAY_BAR_WIDTH, OVERLAY_PILL_HEIGHT, OVERLAY_PILL_BOTTOM_MARGIN } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, BtwOptions } from '../shared/types'
 
 const DEBUG_MODE = process.env.CLUI_DEBUG === '1'
@@ -21,10 +21,46 @@ function log(msg: string): void {
 }
 
 let mainWindow: BrowserWindow | null = null
+let gridWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let screenshotCounter = 0
 let toggleSequence = 0
 let forceQuit = false
+let lastWindowBounds: Electron.Rectangle | null = null
+
+// ─── Snap grid overlay HTML (embedded, no separate file needed) ───
+const SNAP_GRID_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100vw;height:100vh;overflow:hidden;background:transparent}
+.wrap{position:fixed;inset:0;opacity:0;transition:opacity 0.18s ease}
+.wrap.visible{opacity:1}
+.zones{display:flex;width:100%;height:100%;position:absolute;inset:0}
+.zone{flex:1;border-right:1px dashed rgba(255,255,255,0.13);transition:background 0.12s ease}
+.zone:last-child{border-right:none}
+.zone.active{background:rgba(255,255,255,0.04)}
+.hlines{position:absolute;inset:0;pointer-events:none}
+.hl{position:absolute;left:0;width:100%;height:0;border-top:1px dashed rgba(255,255,255,0.13)}
+</style></head><body>
+<div class="wrap" id="w">
+  <div class="zones">
+    <div class="zone" id="left"></div>
+    <div class="zone" id="center"></div>
+    <div class="zone" id="right"></div>
+  </div>
+  <div class="hlines" id="hl"></div>
+</div>
+<script>
+const w=document.getElementById('w');
+const z={left:document.getElementById('left'),center:document.getElementById('center'),right:document.getElementById('right')};
+const hlc=document.getElementById('hl');
+const ROWS=6;
+for(let i=1;i<ROWS;i++){const d=document.createElement('div');d.className='hl';d.style.top=(100*i/ROWS)+'%';hlc.appendChild(d);}
+requestAnimationFrame(()=>w.classList.add('visible'));
+window.setSnapZone=function(zone){
+  Object.values(z).forEach(el=>el.classList.remove('active'));
+  if(z[zone])z[zone].classList.add('active');
+};
+</script></body></html>`
 
 // Feature flag: enable PTY interactive permissions transport
 const INTERACTIVE_PTY = process.env.CLUI_INTERACTIVE_PERMISSIONS_PTY === '1'
@@ -33,9 +69,10 @@ const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 
 // Keep native width fixed to avoid renderer animation vs setBounds race.
 // The UI itself still launches in compact mode; extra width is transparent/click-through.
-const BAR_WIDTH = 1040
-const PILL_HEIGHT = 720  // Fixed native window height — extra room for expanded UI + shadow buffers
-const PILL_BOTTOM_MARGIN = 24
+// Values are imported from shared/types to stay in sync with the renderer.
+const BAR_WIDTH = OVERLAY_BAR_WIDTH
+const PILL_HEIGHT = OVERLAY_PILL_HEIGHT       // Fixed native window height — extra room for expanded UI + shadow buffers
+const PILL_BOTTOM_MARGIN = OVERLAY_PILL_BOTTOM_MARGIN
 
 // ─── Broadcast to renderer ───
 
@@ -157,23 +194,57 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+  lastWindowBounds = mainWindow.getBounds()
 }
 
-function showWindow(source = 'unknown'): void {
+function resetWindowPosition(): void {
   if (!mainWindow) return
-  const toggleId = ++toggleSequence
 
-  // Position on the display where the cursor currently is (not always primary)
   const cursor = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursor)
   const { width: sw, height: sh } = display.workAreaSize
   const { x: dx, y: dy } = display.workArea
+
   mainWindow.setBounds({
     x: dx + Math.round((sw - BAR_WIDTH) / 2),
     y: dy + sh - PILL_HEIGHT - PILL_BOTTOM_MARGIN,
     width: BAR_WIDTH,
     height: PILL_HEIGHT,
   })
+  lastWindowBounds = mainWindow.getBounds()
+}
+
+/** Clamp saved bounds to a valid display work area so the window is never unreachable. */
+function clampBoundsToDisplay(bounds: Electron.Rectangle): Electron.Rectangle {
+  const displays = screen.getAllDisplays()
+  // Find the display whose center is closest to the saved bounds center
+  const cx = bounds.x + bounds.width / 2
+  const cy = bounds.y + bounds.height / 2
+  let best = displays[0]
+  let bestDist = Infinity
+  for (const d of displays) {
+    const dcx = d.workArea.x + d.workArea.width / 2
+    const dcy = d.workArea.y + d.workArea.height / 2
+    const dist = Math.abs(cx - dcx) + Math.abs(cy - dcy)
+    if (dist < bestDist) { bestDist = dist; best = d }
+  }
+  const wa = best.workArea
+  return {
+    x: Math.max(wa.x, Math.min(bounds.x, wa.x + wa.width - bounds.width)),
+    y: Math.max(wa.y, Math.min(bounds.y, wa.y + wa.height - bounds.height)),
+    width: bounds.width,
+    height: bounds.height,
+  }
+}
+
+function showWindow(source = 'unknown'): void {
+  if (!mainWindow) return
+  const toggleId = ++toggleSequence
+
+  if (lastWindowBounds) {
+    // Clamp before applying — display config may have changed (monitor disconnected, scaling changed)
+    mainWindow.setBounds(clampBoundsToDisplay(lastWindowBounds))
+  }
 
   // Always re-assert space membership — the flag can be lost after hide/show cycles
   // and must be set before show() so the window joins the active Space, not its
@@ -181,12 +252,16 @@ function showWindow(source = 'unknown'): void {
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
   if (SPACES_DEBUG) {
-    log(`[spaces] showWindow#${toggleId} source=${source} move-to-display id=${display.id}`)
+    const b = mainWindow.getBounds()
+    log(`[spaces] showWindow#${toggleId} source=${source} preserve-bounds=(${b.x},${b.y},${b.width}x${b.height})`)
     snapshotWindowState(`showWindow#${toggleId} pre-show`)
   }
   // As an accessory app (app.dock.hide), show() + focus gives keyboard
   // without deactivating the active app — hover preserved everywhere.
   mainWindow.show()
+  if (lastWindowBounds) {
+    mainWindow.setBounds(clampBoundsToDisplay(lastWindowBounds))
+  }
   mainWindow.webContents.focus()
   broadcast(IPC.WINDOW_SHOWN)
   if (SPACES_DEBUG) scheduleToggleSnapshots(toggleId, 'show')
@@ -238,6 +313,76 @@ ipcMain.on(IPC.SET_IGNORE_MOUSE_EVENTS, (event, ignore: boolean, options?: { for
   const win = BrowserWindow.fromWebContents(event.sender)
   if (win && !win.isDestroyed()) {
     win.setIgnoreMouseEvents(ignore, options || {})
+  }
+})
+
+// Manual window drag — works reliably with frameless + setIgnoreMouseEvents
+ipcMain.on(IPC.START_WINDOW_DRAG, (event, deltaX: number, deltaY: number) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (win && !win.isDestroyed()) {
+    const [x, y] = win.getPosition()
+    // Vertical is handled in two phases in the renderer: window first (until macOS clamps),
+    // then CSS translateY within the window — so deltaY here is always within allowed range
+    win.setPosition(Math.round(x + deltaX), Math.round(y + deltaY))
+    lastWindowBounds = win.getBounds()
+  }
+})
+
+ipcMain.on(IPC.RESET_WINDOW_POSITION, () => {
+  resetWindowPosition()
+})
+
+// ─── Snap grid overlay window ───
+
+function getOrCreateGridWindow(): BrowserWindow {
+  if (gridWindow && !gridWindow.isDestroyed()) return gridWindow
+
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+
+  gridWindow = new BrowserWindow({
+    x: display.bounds.x,
+    y: display.bounds.y,
+    width: display.bounds.width,
+    height: display.bounds.height,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    focusable: false,
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+  gridWindow.setIgnoreMouseEvents(true)
+  gridWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  gridWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(SNAP_GRID_HTML)}`)
+  return gridWindow
+}
+
+ipcMain.on(IPC.SHOW_SNAP_GRID, () => {
+  const win = getOrCreateGridWindow()
+  // Re-anchor to whichever display the cursor is on
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+  win.setBounds(display.bounds)
+  win.show()
+})
+
+ipcMain.on(IPC.HIDE_SNAP_GRID, () => {
+  if (gridWindow && !gridWindow.isDestroyed()) {
+    gridWindow.hide()
+  }
+})
+
+ipcMain.on(IPC.UPDATE_SNAP_ZONE, (_, zone: 'left' | 'center' | 'right') => {
+  if (gridWindow && !gridWindow.isDestroyed() && gridWindow.isVisible()) {
+    gridWindow.webContents
+      .executeJavaScript(`window.setSnapZone && window.setSnapZone(${JSON.stringify(zone)})`)
+      .catch(() => {})
   }
 })
 
@@ -514,8 +659,8 @@ ipcMain.handle(IPC.LIST_ALL_SESSIONS, async () => {
         try { stat = statSync(filePath) } catch { continue }
         if (stat.size < 100) continue
 
-        const meta: { validated: boolean; slug: string | null; firstMessage: string | null; lastTimestamp: string | null } = {
-          validated: false, slug: null, firstMessage: null, lastTimestamp: null,
+        const meta: { validated: boolean; slug: string | null; firstMessage: string | null; lastTimestamp: string | null; cwd: string | null } = {
+          validated: false, slug: null, firstMessage: null, lastTimestamp: null, cwd: null,
         }
 
         await new Promise<void>((resolve) => {
@@ -528,6 +673,8 @@ ipcMain.handle(IPC.LIST_ALL_SESSIONS, async () => {
               }
               if (obj.slug && !meta.slug) meta.slug = obj.slug
               if (obj.timestamp) meta.lastTimestamp = obj.timestamp
+              // Extract the real working directory — present in every JSONL entry
+              if (obj.cwd && !meta.cwd) meta.cwd = obj.cwd
               if (obj.type === 'user' && !meta.firstMessage) {
                 const content = obj.message?.content
                 if (typeof content === 'string') {
@@ -549,7 +696,8 @@ ipcMain.handle(IPC.LIST_ALL_SESSIONS, async () => {
             firstMessage: meta.firstMessage,
             lastTimestamp: meta.lastTimestamp || stat.mtime.toISOString(),
             size: stat.size,
-            projectPath: encodedDir,
+            // Prefer the real cwd from the JSONL; fall back to encoded dir for very old sessions
+            projectPath: meta.cwd || encodedDir,
           })
         }
       }

@@ -521,6 +521,17 @@ export const useSessionStore = create<State>((set, get) => ({
         timestamp: m.timestamp,
       }))
 
+      // Fallback: if the project folder couldn't be resolved (very old sessions without
+      // a cwd field in their JSONL), warn the user rather than silently failing later.
+      if (isEncodedDir) {
+        messages.push({
+          id: nextMsgId(),
+          role: 'system' as const,
+          content: "This session's original project folder couldn't be determined. To continue, open it from the correct project folder instead.",
+          timestamp: Date.now(),
+        })
+      }
+
       const tab: TabState = {
         ...makeLocalTab(),
         id: tabId,

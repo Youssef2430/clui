@@ -331,6 +331,13 @@ export interface CatalogPlugin {
   isSkillMd: boolean      // true = individual SKILL.md (direct install), false = CLI plugin (bundle install)
 }
 
+// ─── Overlay Window Geometry Constants ───
+// Single source of truth shared between main and renderer to prevent snap/clamp drift.
+
+export const OVERLAY_BAR_WIDTH = 1040
+export const OVERLAY_PILL_HEIGHT = 720
+export const OVERLAY_PILL_BOTTOM_MARGIN = 24
+
 // ─── IPC Channel Names ───
 
 export const IPC = {
@@ -381,6 +388,11 @@ export const IPC = {
   HIDE_WINDOW: 'clui:hide-window',
   WINDOW_SHOWN: 'clui:window-shown',
   SET_IGNORE_MOUSE_EVENTS: 'clui:set-ignore-mouse-events',
+  START_WINDOW_DRAG: 'clui:start-window-drag',
+  RESET_WINDOW_POSITION: 'clui:reset-window-position',
+  SHOW_SNAP_GRID: 'clui:show-snap-grid',
+  HIDE_SNAP_GRID: 'clui:hide-snap-grid',
+  UPDATE_SNAP_ZONE: 'clui:update-snap-zone',
   IS_VISIBLE: 'clui:is-visible',
 
   // Skill provisioning (main → renderer)
