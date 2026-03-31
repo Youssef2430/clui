@@ -162,8 +162,8 @@ export interface TabState {
   sessionMcpServers: Array<{ name: string; status: string }>
   sessionSkills: string[]
   sessionVersion: string | null
-  /** Prompts waiting behind the current run (display text only) */
-  queuedPrompts: string[]
+  /** Prompts waiting behind the current run (display text + optional attachments) */
+  queuedPrompts: Array<{ prompt: string; attachments?: Attachment[] }>
   /** Working directory for this tab's Claude sessions */
   workingDirectory: string
   /** Whether the user explicitly chose a directory (vs. using default home) */

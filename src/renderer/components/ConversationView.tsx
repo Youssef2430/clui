@@ -239,8 +239,8 @@ export function ConversationView() {
 
         {/* Queued prompts */}
         <AnimatePresence>
-          {tab.queuedPrompts.map((prompt, i) => (
-            <QueuedMessage key={`queued-${i}`} content={prompt} />
+          {tab.queuedPrompts.map((queued, i) => (
+            <QueuedMessage key={`queued-${i}`} content={queued.prompt} />
           ))}
         </AnimatePresence>
 
@@ -434,7 +434,7 @@ function parseAttachmentPrefixes(content: string): Attachment[] {
     const type = match[1] as 'image' | 'file'
     const path = match[2]
     const name = path.split('/').pop() || path
-    results.push({ id: `parsed-${path}`, type, name, path })
+    results.push({ id: `parsed-${path}-${results.length}`, type, name, path })
   }
   return results
 }
