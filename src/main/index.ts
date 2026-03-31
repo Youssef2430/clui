@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, Tray, Menu, nativeImage, nativeTheme, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, Tray, Menu, nativeImage, nativeTheme, shell, systemPreferences, protocol, net } from 'electron'
 import { join, resolve, normalize } from 'path'
 import { existsSync, readdirSync, statSync, createReadStream } from 'fs'
 import { readdir } from 'fs/promises'
@@ -1653,6 +1653,13 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin' && app.dock) {
     app.dock.hide()
   }
+
+  // Register custom protocol for serving local file thumbnails to the renderer.
+  // Usage: <img src="clui-local:///path/to/image.png" />
+  protocol.handle('clui-local', (request) => {
+    const filePath = decodeURIComponent(new URL(request.url).pathname)
+    return net.fetch(`file://${filePath}`)
+  })
 
   // Request permissions upfront so the user is never interrupted mid-session.
   await requestPermissions()

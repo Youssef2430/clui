@@ -460,38 +460,54 @@ function MessageAttachments({ attachments }: { attachments: Attachment[] }) {
 
   return (
     <div className="flex flex-wrap gap-1.5 pb-1.5">
-      {attachments.map((a) => (
-        <div
-          key={a.id}
-          className="flex items-center gap-1.5 flex-shrink-0"
-          style={{
-            background: colors.surfaceSecondary,
-            border: `1px solid ${colors.userBubbleBorder}`,
-            borderRadius: 10,
-            padding: a.dataUrl ? '3px 8px 3px 3px' : '4px 8px',
-            maxWidth: 200,
-          }}
-        >
-          {a.dataUrl ? (
+      {attachments.map((a) => {
+        // Resolve image source: prefer base64 dataUrl (instant), fall back to
+        // loading the file from disk via the clui-local:// custom protocol.
+        const imgSrc = a.dataUrl
+          || (a.type === 'image' ? `clui-local://${encodeURIComponent(a.path).replace(/%2F/g, '/')}` : undefined)
+
+        // Image attachments: just the thumbnail, no filename
+        if (imgSrc) {
+          return (
             <img
-              src={a.dataUrl}
+              key={a.id}
+              src={imgSrc}
               alt={a.name}
-              className="rounded-[8px] object-cover flex-shrink-0"
-              style={{ width: 32, height: 32 }}
+              className="rounded-[10px] object-cover flex-shrink-0"
+              style={{
+                maxWidth: '100%',
+                maxHeight: 180,
+                border: `1px solid ${colors.userBubbleBorder}`,
+              }}
             />
-          ) : (
-            <span className="flex-shrink-0" style={{ color: colors.textTertiary }}>
-              {MSG_FILE_ICONS[a.mimeType || ''] || (a.type === 'image' ? <ImageIcon size={14} /> : <File size={14} />)}
-            </span>
-          )}
-          <span
-            className="text-[11px] font-medium truncate min-w-0 flex-1"
-            style={{ color: colors.userBubbleText, opacity: 0.85 }}
+          )
+        }
+
+        // Non-image attachments: icon + filename chip
+        return (
+          <div
+            key={a.id}
+            className="flex items-center gap-1.5 flex-shrink-0"
+            style={{
+              background: colors.surfaceSecondary,
+              border: `1px solid ${colors.userBubbleBorder}`,
+              borderRadius: 10,
+              padding: '4px 8px',
+              maxWidth: 200,
+            }}
           >
-            {a.name}
-          </span>
-        </div>
-      ))}
+            <span className="flex-shrink-0" style={{ color: colors.textTertiary }}>
+              {MSG_FILE_ICONS[a.mimeType || ''] || <File size={14} />}
+            </span>
+            <span
+              className="text-[11px] font-medium truncate min-w-0 flex-1"
+              style={{ color: colors.userBubbleText, opacity: 0.85 }}
+            >
+              {a.name}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
