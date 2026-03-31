@@ -226,3 +226,32 @@ input::placeholder {
 .no-drag {
   cursor: default;
 }
+
+/* ─── Snap zone indicator ─── */
+.snap-grid {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.snap-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  transition: width 0.15s ease, background 0.15s ease, border-radius 0.15s ease;
+}
+
+.snap-grid[data-zone="left"] .snap-dot-left,
+.snap-grid[data-zone="center"] .snap-dot-center,
+.snap-grid[data-zone="right"] .snap-dot-right {
+  width: 18px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.82);
+}

@@ -383,6 +383,9 @@ export const IPC = {
   SET_IGNORE_MOUSE_EVENTS: 'clui:set-ignore-mouse-events',
   START_WINDOW_DRAG: 'clui:start-window-drag',
   RESET_WINDOW_POSITION: 'clui:reset-window-position',
+  SHOW_SNAP_GRID: 'clui:show-snap-grid',
+  HIDE_SNAP_GRID: 'clui:hide-snap-grid',
+  UPDATE_SNAP_ZONE: 'clui:update-snap-zone',
   IS_VISIBLE: 'clui:is-visible',
 
   // Skill provisioning (main → renderer)

@@ -83,6 +83,13 @@ export default function App() {
   const windowYRef = useRef(initialWindowY)
   const cardYRef = useRef(0) // CSS translateY offset (only used after window hits its y constraint)
 
+  // Horizontal snap tracking
+  const BAR_WIDTH_CONST = 1040
+  const windowXRef = useRef(
+    window.screen.availLeft + Math.round((window.screen.availWidth - BAR_WIDTH_CONST) / 2)
+  )
+  const snapGridRef = useRef<HTMLDivElement>(null)
+
   // OS-level click-through (RAF-throttled to avoid per-pixel IPC)
   useEffect(() => {
     if (!window.clui?.setIgnoreMouseEvents) return
@@ -124,16 +131,35 @@ export default function App() {
   useEffect(() => {
     if (!window.clui?.startWindowDrag) return
 
+    // Snap zone helpers — horizontal only (left / center / right)
+    const getSnapZone = (windowX: number): 'left' | 'center' | 'right' => {
+      const availLeft = window.screen.availLeft
+      const availWidth = window.screen.availWidth
+      const cardCenter = windowX + BAR_WIDTH_CONST / 2
+      if (cardCenter < availLeft + availWidth / 3) return 'left'
+      if (cardCenter > availLeft + (availWidth * 2) / 3) return 'right'
+      return 'center'
+    }
+
+    const getSnapTargetX = (zone: 'left' | 'center' | 'right'): number => {
+      const availLeft = window.screen.availLeft
+      const availWidth = window.screen.availWidth
+      if (zone === 'left') return availLeft
+      if (zone === 'right') return availLeft + availWidth - BAR_WIDTH_CONST
+      return availLeft + Math.round((availWidth - BAR_WIDTH_CONST) / 2)
+    }
+
     const onMouseDown = (e: MouseEvent) => {
       const el = e.target as HTMLElement
       // Skip interactive elements — everything else on the card is draggable
       if (el.closest('button, input, textarea, a, select, [role="button"], [contenteditable], .cm-editor')) return
       if (!el.closest('[data-clui-ui]')) return
       e.preventDefault()
-      // Double-click: snap back to default position
+      // Double-click: snap back to center-bottom
       if (e.detail >= 2) {
         window.clui.resetWindowPosition()
         windowYRef.current = initialWindowY
+        windowXRef.current = window.screen.availLeft + Math.round((window.screen.availWidth - BAR_WIDTH_CONST) / 2)
         cardYRef.current = 0
         document.documentElement.style.setProperty('--clui-card-y', '0px')
         return
@@ -141,6 +167,14 @@ export default function App() {
       // Ensure full mouse capture for the duration of the drag
       window.clui.setIgnoreMouseEvents(false)
       dragRef.current = { startX: e.screenX, startY: e.screenY }
+      // Show snap grid (dots below card + full-screen overlay)
+      const zone = getSnapZone(windowXRef.current)
+      if (snapGridRef.current) {
+        snapGridRef.current.dataset.zone = zone
+        snapGridRef.current.style.opacity = '1'
+      }
+      window.clui.showSnapGrid()
+      window.clui.updateSnapZone(zone)
     }
 
     const onMouseMove = (e: MouseEvent) => {
@@ -149,7 +183,17 @@ export default function App() {
       const dy = e.screenY - dragRef.current.startY
       if (dx !== 0 || dy !== 0) {
         // Horizontal: always native window movement (full screen width range)
-        if (dx !== 0) window.clui.startWindowDrag(dx, 0)
+        if (dx !== 0) {
+          window.clui.startWindowDrag(dx, 0)
+          windowXRef.current += dx
+          const zone = getSnapZone(windowXRef.current)
+          // Update dots indicator
+          if (snapGridRef.current) {
+            snapGridRef.current.dataset.zone = zone
+          }
+          // Update full-screen grid overlay
+          window.clui.updateSnapZone(zone)
+        }
         // Vertical: move window first (until macOS y constraint), then CSS within window
         if (dy !== 0) {
           if (dy < 0) {
@@ -185,6 +229,21 @@ export default function App() {
     }
 
     const onMouseUp = () => {
+      if (dragRef.current) {
+        // Snap window to nearest horizontal zone
+        const zone = getSnapZone(windowXRef.current)
+        const targetX = getSnapTargetX(zone)
+        const deltaX = targetX - windowXRef.current
+        if (deltaX !== 0) {
+          window.clui.startWindowDrag(deltaX, 0)
+          windowXRef.current = targetX
+        }
+        // Hide snap grid (dots + full-screen overlay)
+        if (snapGridRef.current) {
+          snapGridRef.current.style.opacity = '0'
+        }
+        window.clui.hideSnapGrid()
+      }
       dragRef.current = null
     }
 
@@ -370,6 +429,13 @@ export default function App() {
             >
               <InputBar ref={inputBarRef} />
             </div>
+          </div>
+
+          {/* Snap zone indicator — shown during drag, hidden otherwise */}
+          <div ref={snapGridRef} className="snap-grid" style={{ opacity: 0 }}>
+            <div className="snap-dot snap-dot-left" />
+            <div className="snap-dot snap-dot-center" />
+            <div className="snap-dot snap-dot-right" />
           </div>
         </div>
       </div>

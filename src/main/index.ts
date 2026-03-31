@@ -21,11 +21,47 @@ function log(msg: string): void {
 }
 
 let mainWindow: BrowserWindow | null = null
+let gridWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let screenshotCounter = 0
 let toggleSequence = 0
 let forceQuit = false
 let lastWindowBounds: Electron.Rectangle | null = null
+
+// ─── Snap grid overlay HTML (embedded, no separate file needed) ───
+const SNAP_GRID_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100vw;height:100vh;overflow:hidden;background:transparent}
+.wrap{position:fixed;inset:0;opacity:0;transition:opacity 0.18s ease}
+.wrap.visible{opacity:1}
+.zones{display:flex;width:100%;height:100%;position:absolute;inset:0}
+.zone{flex:1;border-right:1px dashed rgba(255,255,255,0.13);transition:background 0.12s ease}
+.zone:last-child{border-right:none}
+.zone.active{background:rgba(255,255,255,0.04)}
+.hlines{position:absolute;inset:0;pointer-events:none}
+.hl{position:absolute;left:0;width:100%;height:0;border-top:1px dashed rgba(255,255,255,0.13)}
+</style></head><body>
+<div class="wrap" id="w">
+  <div class="zones">
+    <div class="zone" id="left"></div>
+    <div class="zone" id="center"></div>
+    <div class="zone" id="right"></div>
+  </div>
+  <div class="hlines" id="hl"></div>
+</div>
+<script>
+const{ipcRenderer}=require('electron');
+const w=document.getElementById('w');
+const z={left:document.getElementById('left'),center:document.getElementById('center'),right:document.getElementById('right')};
+const hlc=document.getElementById('hl');
+const ROWS=6;
+for(let i=1;i<ROWS;i++){const d=document.createElement('div');d.className='hl';d.style.top=(100*i/ROWS)+'%';hlc.appendChild(d);}
+requestAnimationFrame(()=>w.classList.add('visible'));
+ipcRenderer.on('zone',(_,zone)=>{
+  Object.values(z).forEach(el=>el.classList.remove('active'));
+  if(z[zone])z[zone].classList.add('active');
+});
+</script></body></html>`
 
 // Feature flag: enable PTY interactive permissions transport
 const INTERACTIVE_PTY = process.env.CLUI_INTERACTIVE_PERMISSIONS_PTY === '1'
@@ -270,6 +306,58 @@ ipcMain.on(IPC.START_WINDOW_DRAG, (event, deltaX: number, deltaY: number) => {
 
 ipcMain.on(IPC.RESET_WINDOW_POSITION, () => {
   resetWindowPosition()
+})
+
+// ─── Snap grid overlay window ───
+
+function getOrCreateGridWindow(): BrowserWindow {
+  if (gridWindow && !gridWindow.isDestroyed()) return gridWindow
+
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+
+  gridWindow = new BrowserWindow({
+    x: display.bounds.x,
+    y: display.bounds.y,
+    width: display.bounds.width,
+    height: display.bounds.height,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    focusable: false,
+    show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  })
+  gridWindow.setIgnoreMouseEvents(true)
+  gridWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  gridWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(SNAP_GRID_HTML)}`)
+  return gridWindow
+}
+
+ipcMain.on(IPC.SHOW_SNAP_GRID, () => {
+  const win = getOrCreateGridWindow()
+  // Re-anchor to whichever display the cursor is on
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+  win.setBounds(display.bounds)
+  win.show()
+})
+
+ipcMain.on(IPC.HIDE_SNAP_GRID, () => {
+  if (gridWindow && !gridWindow.isDestroyed()) {
+    gridWindow.hide()
+  }
+})
+
+ipcMain.on(IPC.UPDATE_SNAP_ZONE, (_, zone: string) => {
+  if (gridWindow && !gridWindow.isDestroyed() && gridWindow.isVisible()) {
+    gridWindow.webContents.send('zone', zone)
+  }
 })
 
 // ─── IPC Handlers (typed, strict) ───
