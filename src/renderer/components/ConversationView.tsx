@@ -23,7 +23,7 @@ import type { Message, Attachment } from '../../shared/types'
 
 const INITIAL_RENDER_CAP = 100
 const PAGE_SIZE = 100
-const REMARK_PLUGINS = [remarkGfm, remarkMath] // Hoisted — prevents re-parse on every render
+const REMARK_PLUGINS = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as any // Hoisted — prevents re-parse on every render
 const REHYPE_PLUGINS = [rehypeKatex]
 
 // Minimal link override for Markdown surfaces without full markdownComponents:

@@ -7,7 +7,7 @@ import rehypeKatex from 'rehype-katex'
 import { useSessionStore } from '../stores/sessionStore'
 import { useColors } from '../theme'
 
-const REMARK_PLUGINS = [remarkGfm, remarkMath]
+const REMARK_PLUGINS = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as any
 const REHYPE_PLUGINS = [rehypeKatex]
 
 // Prevents default <a> navigation inside Electron; opens links externally instead.

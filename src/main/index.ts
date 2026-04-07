@@ -313,7 +313,25 @@ function showWindow(source = 'unknown'): void {
   if (!mainWindow) return
   const toggleId = ++toggleSequence
 
+  // Always show on the display where the cursor currently is.
+  // If the cursor moved to a different display since the last show,
+  // reposition the overlay to that display (centered, bottom-pinned).
+  const cursor = screen.getCursorScreenPoint()
+  const cursorDisplay = screen.getDisplayNearestPoint(cursor)
+
   if (lastWindowBounds) {
+    const savedDisplay = screen.getDisplayMatching(lastWindowBounds)
+    if (savedDisplay.id !== cursorDisplay.id) {
+      // Cursor is on a different display — reposition to cursor's display
+      const { width: sw, height: sh } = cursorDisplay.workAreaSize
+      const { x: dx, y: dy } = cursorDisplay.workArea
+      lastWindowBounds = {
+        x: dx + Math.round((sw - BAR_WIDTH) / 2),
+        y: dy + sh - PILL_HEIGHT - PILL_BOTTOM_MARGIN,
+        width: BAR_WIDTH,
+        height: PILL_HEIGHT,
+      }
+    }
     // Clamp before applying — display config may have changed (monitor disconnected, scaling changed)
     mainWindow.setBounds(clampBoundsToDisplay(lastWindowBounds))
   }

@@ -2,4 +2,4 @@
 
 ## Formatting
 
-- Always escape dollar signs in responses: use `\$` instead of `$` to prevent Markdown renderers from interpreting them as LaTeX math delimiters.
+- Dollar signs are safe to use naturally (e.g. \$100). The renderer only treats `$$...$$` as math, not single `$`.
