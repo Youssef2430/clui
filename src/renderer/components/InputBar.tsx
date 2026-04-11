@@ -143,8 +143,8 @@ function findMentionAtCursor(text: string, cursor: number): [number, number] | n
     const nextChar = text[tokenEnd]
     const isComplete = nextChar === ' ' || nextChar === '\n' || tokenEnd === text.length
     if (!isComplete) continue
-    // Include the trailing space as part of the deletable region
-    const deleteEnd = nextChar === ' ' || nextChar === '\n' ? tokenEnd + 1 : tokenEnd
+    // Include the trailing space (but not newline) as part of the deletable region
+    const deleteEnd = nextChar === ' ' ? tokenEnd + 1 : tokenEnd
     if (cursor > tokenStart && cursor <= deleteEnd) {
       return [tokenStart, deleteEnd]
     }
@@ -310,9 +310,10 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
     const mirror = mirrorRef.current
     if (!el || !mirror) return
     const onScroll = () => { mirror.scrollTop = el.scrollTop }
+    onScroll()
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
-  })
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -680,6 +681,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
           const [start, end] = mention
           const newInput = input.slice(0, start) + input.slice(end)
           setInput(newInput)
+          setSelectionPos(start)
           updateMentionFilter(newInput, start)
           requestAnimationFrame(() => {
             if (textareaRef.current) {
