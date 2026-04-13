@@ -161,12 +161,35 @@ ok "All checks passed"
 # ─── Publish to GitHub ────────────────────────────────────────────────────────
 header "Publishing to GitHub"
 
-info "Uploading artifacts to GitHub release v${VERSION}..."
-npx electron-builder --mac --publish always 2>&1 | while IFS= read -r line; do
-  if echo "$line" | grep -qE '(publishing|uploading|upload|error|Error|GitHub)'; then
-    echo "  $line"
-  fi
+TAG="v${VERSION}"
+
+# Create the release if it doesn't exist yet
+if gh release view "$TAG" --repo "Youssef2430/clui" &>/dev/null; then
+  ok "Release ${TAG} already exists, will replace duplicate assets"
+else
+  info "Creating release ${TAG}..."
+  gh release create "$TAG" \
+    --repo "Youssef2430/clui" \
+    --title "Clui ${TAG}" \
+    --generate-notes
+  ok "Release ${TAG} created"
+fi
+
+# Collect all publishable artifacts
+artifacts=()
+for f in "$RELEASE_DIR"/Clui-*.dmg "$RELEASE_DIR"/Clui-*-mac*.zip "$RELEASE_DIR"/latest-mac.yml "$RELEASE_DIR"/*.blockmap; do
+  [ -f "$f" ] && artifacts+=("$f")
 done
+
+if [ ${#artifacts[@]} -eq 0 ]; then
+  fail "No artifacts found in $RELEASE_DIR"
+fi
+
+info "Uploading ${#artifacts[@]} artifact(s)..."
+gh release upload "$TAG" \
+  --repo "Youssef2430/clui" \
+  --clobber \
+  "${artifacts[@]}"
 
 ok "Published to GitHub"
 
