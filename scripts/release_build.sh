@@ -47,6 +47,18 @@ if [ -n "$(git status --porcelain)" ]; then
   [[ "$confirm" =~ ^[Yy]$ ]] || exit 1
 fi
 
+# ─── Clean old artifacts ─────────────────────────────────────────────────────
+header "Cleaning release directory"
+
+RELEASE_DIR="$PROJECT_ROOT/release"
+if [ -d "$RELEASE_DIR" ]; then
+  info "Removing old build artifacts..."
+  rm -rf "$RELEASE_DIR"
+  ok "Clean slate"
+else
+  ok "No previous artifacts"
+fi
+
 # ─── Build ────────────────────────────────────────────────────────────────────
 header "Building Clui v${VERSION}"
 
@@ -134,9 +146,9 @@ for arch_dir in mac-arm64 mac; do
   fi
 done
 
-# ── Staple DMGs (best-effort, not fatal) ──
+# ── Staple DMGs for current version (best-effort, not fatal) ──
 info "Checking DMGs..."
-for dmg in "$RELEASE_DIR"/Clui-*.dmg; do
+for dmg in "$RELEASE_DIR"/Clui-"${VERSION}"*.dmg; do
   [ -f "$dmg" ] || continue
   dmg_name=$(basename "$dmg")
   staple_out=$(stapler validate "$dmg" 2>&1) || true
@@ -175,9 +187,13 @@ else
   ok "Release ${TAG} created"
 fi
 
-# Collect all publishable artifacts
+# Collect only current version's artifacts
 artifacts=()
-for f in "$RELEASE_DIR"/Clui-*.dmg "$RELEASE_DIR"/Clui-*-mac*.zip "$RELEASE_DIR"/latest-mac.yml "$RELEASE_DIR"/*.blockmap; do
+for f in \
+  "$RELEASE_DIR"/Clui-"${VERSION}"*.dmg \
+  "$RELEASE_DIR"/Clui-"${VERSION}"*-mac*.zip \
+  "$RELEASE_DIR"/Clui-"${VERSION}"*.blockmap \
+  "$RELEASE_DIR"/latest-mac.yml; do
   [ -f "$f" ] && artifacts+=("$f")
 done
 
