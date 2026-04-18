@@ -12,6 +12,95 @@ function confidenceLabel(score: number): string {
   return `${pct}% match`
 }
 
+// ─── Dot-grid download loader ───
+
+const DOT = 3       // px per square
+const GAP = 1.5     // px between squares
+const ROWS = 5
+const STEP = DOT + GAP  // 4.5 px per cell stride
+
+/**
+ * Renders a 5-row grid of tiny squares that fills column-by-column
+ * (top→bottom within each column, then next column) as progress goes 0→100.
+ *
+ * Uses a single <canvas> for zero-DOM-overhead rendering. A rAF loop smoothly
+ * interpolates toward the target progress so the fill feels fluid.
+ */
+function DotGridLoader({ progress, accent }: { progress: number; accent: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const targetRef = useRef(progress)
+  const smoothRef = useRef(0)
+  const rafRef = useRef<ReturnType<typeof requestAnimationFrame>>()
+
+  // Keep target in sync
+  useEffect(() => { targetRef.current = progress }, [progress])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const wrap = wrapRef.current
+    if (!canvas || !wrap) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // Parse accent colour once
+    const temp = document.createElement('canvas').getContext('2d')!
+    temp.fillStyle = accent
+    const accentRgb = temp.fillStyle // normalised hex
+
+    const draw = () => {
+      // Lerp toward target
+      const target = targetRef.current
+      const prev = smoothRef.current
+      smoothRef.current = Math.abs(target - prev) < 0.3
+        ? target
+        : prev + (target - prev) * 0.12
+
+      const w = wrap.clientWidth
+      const dpr = window.devicePixelRatio || 1
+      const cols = Math.floor((w + GAP) / STEP)
+      const gridW = cols * DOT + (cols - 1) * GAP
+      const gridH = ROWS * DOT + (ROWS - 1) * GAP
+
+      canvas.width = Math.round(gridW * dpr)
+      canvas.height = Math.round(gridH * dpr)
+      canvas.style.width = `${gridW}px`
+      canvas.style.height = `${gridH}px`
+      ctx.scale(dpr, dpr)
+
+      const totalCells = cols * ROWS
+      const filled = Math.round((smoothRef.current / 100) * totalCells)
+
+      ctx.clearRect(0, 0, gridW, gridH)
+
+      for (let col = 0; col < cols; col++) {
+        for (let row = 0; row < ROWS; row++) {
+          const fillIndex = col * ROWS + row
+          ctx.globalAlpha = fillIndex < filled ? 0.85 : 0.07
+          ctx.fillStyle = accentRgb
+          const x = col * STEP
+          const y = row * STEP
+          ctx.beginPath()
+          ctx.roundRect(x, y, DOT, DOT, 0.5)
+          ctx.fill()
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(draw)
+    }
+
+    rafRef.current = requestAnimationFrame(draw)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [accent])
+
+  return (
+    <div ref={wrapRef} style={{ width: '100%', lineHeight: 0 }}>
+      <canvas ref={canvasRef} />
+    </div>
+  )
+}
+
 export function SearchPanel() {
   const colors = useColors()
   const closeSearchPanel = useSessionStore((s) => s.closeSearchPanel)
@@ -91,6 +180,7 @@ export function SearchPanel() {
     closeSearchPanel()
   }, [closeSearchPanel])
 
+  const isDownloading = indexStatus.state === 'downloading'
   const isIndexing = indexStatus.state === 'indexing'
   const isError = indexStatus.state === 'error'
   const isIdle = indexStatus.state === 'idle'
@@ -208,8 +298,31 @@ export function SearchPanel() {
       </div>
 
       {/* ─── Index status ─── */}
-      {(isIndexing || isError || (isIdle && query.trim())) && (
+      {(isDownloading || isIndexing || isError || (isIdle && query.trim())) && (
         <div style={{ padding: '8px 18px 0', flexShrink: 0 }}>
+          {isDownloading && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: [0.4, 0, 0.1, 1] }}
+              style={{
+                display: 'flex', flexDirection: 'column', gap: 6,
+                padding: '8px 12px', borderRadius: 8,
+                background: colors.accentLight,
+                border: `1px solid ${colors.accentBorder}`,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, color: colors.accent, fontWeight: 600 }}>
+                  Downloading search model
+                </span>
+                <span style={{ fontSize: 10, color: colors.accent, opacity: 0.55, fontWeight: 500 }}>
+                  {indexStatus.progress ?? 0}%
+                </span>
+              </div>
+              <DotGridLoader progress={indexStatus.progress ?? 0} accent={colors.accent} />
+            </motion.div>
+          )}
           {isIndexing && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8,

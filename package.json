@@ -45,7 +45,8 @@
       "dist/preload/**/*",
       "dist/renderer/**/*",
       "resources/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/@huggingface/transformers/.cache"
     ],
     "publish": {
       "provider": "github",

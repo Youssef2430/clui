@@ -306,9 +306,10 @@ export interface SearchResult {
 }
 
 export interface SearchIndexStatus {
-  state: 'idle' | 'indexing' | 'ready' | 'error'
+  state: 'idle' | 'downloading' | 'indexing' | 'ready' | 'error'
   indexed?: number
   total?: number
+  progress?: number  // 0-100, used during 'downloading' state
   error?: string
 }
 

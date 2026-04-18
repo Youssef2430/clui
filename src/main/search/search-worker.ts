@@ -180,10 +180,27 @@ async function ensurePipeline(): Promise<void> {
   if (pipeline) return
 
   // Dynamic import — @huggingface/transformers is externalized by electron-vite
-  const { pipeline: createPipeline } = await import('@huggingface/transformers')
+  const { pipeline: createPipeline, env } = await import('@huggingface/transformers')
+
+  // Redirect model cache to a real filesystem path outside app.asar.
+  // The library will download the model on first use (~90 MB).
+  env.cacheDir = join(homedir(), '.clui', 'models')
+
+  // Track loaded/total bytes per file to compute true aggregate progress.
+  // Per-file `progress` percentage is misleading because small files hit 100%
+  // instantly before the large model.onnx even starts.
+  const fileProgress: Record<string, { loaded: number; total: number }> = {}
   pipeline = await createPipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
-    // Use default cache dir (~/.cache/huggingface)
     quantized: true,
+    progress_callback: (info: any) => {
+      if (info.status === 'progress' && info.file) {
+        fileProgress[info.file] = { loaded: info.loaded ?? 0, total: info.total ?? 0 }
+        const loaded = Object.values(fileProgress).reduce((s, f) => s + f.loaded, 0)
+        const total = Object.values(fileProgress).reduce((s, f) => s + f.total, 0)
+        const p = total > 0 ? Math.round((loaded / total) * 100) : 0
+        postStatus({ state: 'downloading', progress: p })
+      }
+    },
   })
 }
 
