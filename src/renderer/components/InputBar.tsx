@@ -225,17 +225,43 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
     icon: <span className="text-[11px]">✦</span>,
   }))
 
+  const focusTextareaIfAppropriate = useCallback(() => {
+    const textarea = textareaRef.current
+    if (!textarea || typeof document === 'undefined') return
+
+    const active = document.activeElement as HTMLElement | null
+    if (active === textarea) return
+
+    const isOtherEditable = !!active && (
+      active.tagName === 'INPUT' ||
+      active.tagName === 'TEXTAREA' ||
+      active.isContentEditable
+    )
+    if (isOtherEditable) return
+
+    textarea.focus()
+  }, [])
+
   useEffect(() => {
-    textareaRef.current?.focus()
-  }, [activeTabId])
+    focusTextareaIfAppropriate()
+  }, [activeTabId, focusTextareaIfAppropriate])
 
   // Focus textarea when window is shown (shortcut toggle, screenshot return)
+  // and when the already-visible window regains focus after an external app
+  // temporarily steals it (for example a clipboard manager).
   useEffect(() => {
     const unsub = window.clui.onWindowShown(() => {
-      textareaRef.current?.focus()
+      requestAnimationFrame(() => focusTextareaIfAppropriate())
     })
-    return unsub
-  }, [])
+    const handleWindowFocus = () => {
+      requestAnimationFrame(() => focusTextareaIfAppropriate())
+    }
+    window.addEventListener('focus', handleWindowFocus)
+    return () => {
+      unsub()
+      window.removeEventListener('focus', handleWindowFocus)
+    }
+  }, [focusTextareaIfAppropriate])
 
   const measureInlineHeight = useCallback((value: string): number => {
     if (typeof document === 'undefined') return 0

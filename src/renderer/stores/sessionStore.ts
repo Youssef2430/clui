@@ -208,6 +208,59 @@ function makeLocalTab(): TabState {
   }
 }
 
+async function ensureBackendTabRegistered(tabId: string): Promise<string> {
+  const existingRegistration = backendTabRegistrations.get(tabId)
+  if (existingRegistration) {
+    return existingRegistration
+  }
+
+  const registration = (async () => {
+    const currentTab = useSessionStore.getState().tabs.find((tab) => tab.id === tabId)
+    if (!currentTab) {
+      return tabId
+    }
+
+    try {
+      const health = await window.clui.tabHealth()
+      if (health?.tabs?.some((tab) => tab.tabId === tabId)) {
+        return tabId
+      }
+    } catch {
+      // If a run is already active, prefer the current tab ID over creating a
+      // second backend tab during a transient health-check failure.
+      if (currentTab.activeRequestId || currentTab.status === 'running' || currentTab.status === 'connecting') {
+        return tabId
+      }
+    }
+
+    const { tabId: backendTabId } = await window.clui.createTab()
+    useSessionStore.setState((s) => ({
+      tabs: s.tabs.map((t) => (
+        t.id === tabId
+          ? {
+              ...t,
+              id: backendTabId,
+              activeRequestId: null,
+              currentActivity: '',
+              status: 'idle',
+            }
+          : t
+      )),
+      activeTabId: s.activeTabId === tabId ? backendTabId : s.activeTabId,
+    }))
+    return backendTabId
+  })()
+
+  backendTabRegistrations.set(tabId, registration)
+  return registration.finally(() => {
+    if (backendTabRegistrations.get(tabId) === registration) {
+      backendTabRegistrations.delete(tabId)
+    }
+  })
+}
+
+const backendTabRegistrations = new Map<string, Promise<string>>()
+
 const initialTab = makeLocalTab()
 
 export const useSessionStore = create<State>((set, get) => ({
@@ -546,7 +599,9 @@ export const useSessionStore = create<State>((set, get) => ({
     if (s.activeTabId === tabId) {
       if (remaining.length === 0) {
         const newTab = makeLocalTab()
+        newTab.workingDirectory = get().staticInfo?.homePath || '~'
         set({ tabs: [newTab], activeTabId: newTab.id })
+        void ensureBackendTabRegistered(newTab.id).catch(() => {})
         return
       }
       const closedIndex = s.tabs.findIndex((t) => t.id === tabId)
@@ -828,94 +883,111 @@ export const useSessionStore = create<State>((set, get) => ({
   // ─── Send ───
 
   sendMessage: (prompt, projectPath) => {
-    const { activeTabId, tabs, staticInfo } = get()
-    const tab = tabs.find((t) => t.id === activeTabId)
-    // Use explicitly chosen directory, otherwise fall back to user home
-    const resolvedPath = projectPath || (tab?.hasChosenDirectory ? tab.workingDirectory : (staticInfo?.homePath || tab?.workingDirectory || '~'))
-    if (!tab) return
+    void (async () => {
+      let errorTabId: string | null = null
 
-    // Guard: don't send while connecting (warmup in progress)
-    if (tab.status === 'connecting') return
+      try {
+        const initialState = get()
+        const initialTab = initialState.tabs.find((t) => t.id === initialState.activeTabId)
+        if (!initialTab) return
 
-    const isBusy = tab.status === 'running'
-    const requestId = crypto.randomUUID()
+        errorTabId = initialTab.id
 
-    // Build full prompt with attachment context
-    let fullPrompt = prompt
-    if (tab.attachments.length > 0) {
-      const attachmentCtx = tab.attachments
-        .map((a) => `[Attached ${a.type}: ${a.path}]`)
-        .join('\n')
-      fullPrompt = `${attachmentCtx}\n\n${prompt}`
-    }
+        // Guard: don't send while connecting (warmup in progress)
+        if (initialTab.status === 'connecting') return
 
-    const title = tab.messages.length === 0
-      ? (prompt.length > 30 ? prompt.substring(0, 27) + '...' : prompt)
-      : tab.title
+        const tabId = await ensureBackendTabRegistered(initialTab.id)
+        errorTabId = tabId
 
-    // Optimistic update: clear attachments
-    // If busy, add to queuedPrompts (shown at bottom); otherwise add to messages and set connecting
-    set((s) => ({
-      tabs: s.tabs.map((t) => {
-        if (t.id !== activeTabId) return t
-        const withEffectiveBase = t.hasChosenDirectory
-          ? t
-          : {
-              ...t,
-              // Once the user sends the first message, lock in the effective
-              // base directory (home by default) so the footer no longer shows "—".
-              hasChosenDirectory: true,
-              workingDirectory: resolvedPath,
+        const { tabs, staticInfo, preferredModel } = get()
+        const tab = tabs.find((t) => t.id === tabId)
+        if (!tab) return
+
+        // Use explicitly chosen directory, otherwise fall back to user home
+        const resolvedPath = projectPath || (tab.hasChosenDirectory ? tab.workingDirectory : (staticInfo?.homePath || tab.workingDirectory || '~'))
+        const isBusy = tab.status === 'running'
+        const requestId = crypto.randomUUID()
+
+        // Build full prompt with attachment context
+        let fullPrompt = prompt
+        if (tab.attachments.length > 0) {
+          const attachmentCtx = tab.attachments
+            .map((a) => `[Attached ${a.type}: ${a.path}]`)
+            .join('\n')
+          fullPrompt = `${attachmentCtx}\n\n${prompt}`
+        }
+
+        const title = tab.messages.length === 0
+          ? (prompt.length > 30 ? prompt.substring(0, 27) + '...' : prompt)
+          : tab.title
+
+        // Optimistic update: clear attachments
+        // If busy, add to queuedPrompts (shown at bottom); otherwise add to messages and set connecting
+        set((s) => ({
+          tabs: s.tabs.map((t) => {
+            if (t.id !== tabId) return t
+            const withEffectiveBase = t.hasChosenDirectory
+              ? t
+              : {
+                  ...t,
+                  // Once the user sends the first message, lock in the effective
+                  // base directory (home by default) so the footer no longer shows "—".
+                  hasChosenDirectory: true,
+                  workingDirectory: resolvedPath,
+                }
+            if (isBusy) {
+              return {
+                ...withEffectiveBase,
+                title,
+                attachments: [],
+                queuedPrompts: [
+                  ...withEffectiveBase.queuedPrompts,
+                  { prompt, attachments: tab.attachments.length > 0 ? [...tab.attachments] : undefined },
+                ],
+              }
             }
-        if (isBusy) {
-          return {
-            ...withEffectiveBase,
-            title,
-            attachments: [],
-            queuedPrompts: [
-              ...withEffectiveBase.queuedPrompts,
-              { prompt, attachments: tab.attachments.length > 0 ? [...tab.attachments] : undefined },
-            ],
-          }
-        }
-        return {
-          ...withEffectiveBase,
-          status: 'connecting' as TabStatus,
-          activeRequestId: requestId,
-          currentActivity: 'Starting...',
-          title,
-          attachments: [],
-          messages: [
-            ...withEffectiveBase.messages,
-            {
-              id: nextMsgId(),
-              role: 'user' as const,
-              content: prompt,
-              timestamp: Date.now(),
-              attachments: tab.attachments.length > 0 ? [...tab.attachments] : undefined,
-            },
-          ],
-        }
-      }),
-    }))
+            return {
+              ...withEffectiveBase,
+              status: 'connecting' as TabStatus,
+              activeRequestId: requestId,
+              currentActivity: 'Starting...',
+              title,
+              attachments: [],
+              messages: [
+                ...withEffectiveBase.messages,
+                {
+                  id: nextMsgId(),
+                  role: 'user' as const,
+                  content: prompt,
+                  timestamp: Date.now(),
+                  attachments: tab.attachments.length > 0 ? [...tab.attachments] : undefined,
+                },
+              ],
+            }
+          }),
+        }))
 
-    // Send to backend — ControlPlane will queue if a run is active
-    const { preferredModel } = get()
-    window.clui.prompt(activeTabId, requestId, {
-      prompt: fullPrompt,
-      projectPath: resolvedPath,
-      sessionId: tab.claudeSessionId || undefined,
-      model: preferredModel || undefined,
-      addDirs: tab.additionalDirs.length > 0 ? tab.additionalDirs : undefined,
-    }).catch((err: Error) => {
-      get().handleError(activeTabId, {
-        message: err.message,
-        stderrTail: [],
-        exitCode: null,
-        elapsedMs: 0,
-        toolCallCount: 0,
-      })
-    })
+        // Send to backend — ControlPlane will queue if a run is active
+        await window.clui.prompt(tabId, requestId, {
+          prompt: fullPrompt,
+          projectPath: resolvedPath,
+          sessionId: tab.claudeSessionId || undefined,
+          model: preferredModel || undefined,
+          addDirs: tab.additionalDirs.length > 0 ? tab.additionalDirs : undefined,
+        })
+      } catch (err) {
+        if (!errorTabId) return
+
+        const message = err instanceof Error ? err.message : String(err)
+        get().handleError(errorTabId, {
+          message,
+          stderrTail: [],
+          exitCode: null,
+          elapsedMs: 0,
+          toolCallCount: 0,
+        })
+      }
+    })()
   },
 
   // ─── Event handlers ───
