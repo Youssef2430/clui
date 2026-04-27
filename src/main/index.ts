@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, Tray, Menu, nativeImage, nativeTheme, shell, systemPreferences, protocol, net } from 'electron'
-import { execFile, execFileSync, spawn } from 'child_process'
+import { execFile, spawn } from 'child_process'
 import { basename, join, resolve, normalize } from 'path'
 import { existsSync, readdirSync, statSync, createReadStream, mkdirSync, writeFileSync, chmodSync } from 'fs'
 import { readdir } from 'fs/promises'
@@ -208,50 +208,51 @@ function getAppId(info: PlistObject, appPath: string): TerminalId {
   return `app:${stripAppExtension(basename(appPath)).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 }
 
-function discoverAppBundles(rootDir: string, depth = 1): string[] {
+async function discoverAppBundles(rootDir: string, depth = 1): Promise<string[]> {
   if (!existsSync(rootDir)) return []
 
-  const bundles: string[] = []
-  const entries = (() => {
-    try {
-      return readdirSync(rootDir, { withFileTypes: true })
-    } catch {
-      return []
-    }
-  })()
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
+  const entries = await readdir(rootDir, { withFileTypes: true }).catch(() => [])
+  const bundles = await Promise.all(entries.map(async (entry) => {
+    if (!entry.isDirectory()) return []
 
     const fullPath = join(rootDir, entry.name)
     if (entry.name.endsWith('.app')) {
-      bundles.push(fullPath)
-      continue
+      return [fullPath]
     }
 
     if (depth > 0) {
-      bundles.push(...discoverAppBundles(fullPath, depth - 1))
+      return discoverAppBundles(fullPath, depth - 1)
     }
-  }
 
-  return bundles
+    return []
+  }))
+
+  return bundles.flat()
 }
 
-function readBundleInfo(appPath: string): PlistObject | null {
+function readBundleInfo(appPath: string): Promise<PlistObject | null> {
   const plistPath = join(appPath, 'Contents', 'Info.plist')
-  if (!existsSync(plistPath)) return null
+  if (!existsSync(plistPath)) return Promise.resolve(null)
 
-  try {
-    const output = execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plistPath], {
+  return new Promise((resolve) => {
+    execFile('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plistPath], {
       encoding: 'utf8',
       maxBuffer: 2 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'ignore'],
+    }, (err, stdout) => {
+      if (err) {
+        resolve(null)
+        return
+      }
+
+      try {
+        const parsed = JSON.parse(String(stdout))
+        resolve(parsed && typeof parsed === 'object' ? parsed as PlistObject : null)
+      } catch {
+        resolve(null)
+      }
     })
-    const parsed = JSON.parse(output)
-    return parsed && typeof parsed === 'object' ? parsed as PlistObject : null
-  } catch {
-    return null
-  }
+  })
 }
 
 function getDocumentTypes(info: PlistObject): PlistObject[] {
@@ -293,8 +294,8 @@ function detectLaunchStrategy(info: PlistObject, execPath: string | null): Termi
   return null
 }
 
-function buildInstalledTerminal(appPath: string): InstalledTerminal | null {
-  const info = readBundleInfo(appPath)
+async function buildInstalledTerminal(appPath: string): Promise<InstalledTerminal | null> {
+  const info = await readBundleInfo(appPath)
   if (!info) return null
 
   const execPath = getExecutablePath(info, appPath)
@@ -311,24 +312,18 @@ function buildInstalledTerminal(appPath: string): InstalledTerminal | null {
 }
 
 let installedTerminalCache: { scannedAt: number; terminals: InstalledTerminal[] } | null = null
+let installedTerminalScanPromise: Promise<InstalledTerminal[]> | null = null
 
-function getInstalledTerminals(): InstalledTerminal[] {
-  if (installedTerminalCache && Date.now() - installedTerminalCache.scannedAt < TERMINAL_DISCOVERY_CACHE_MS) {
-    return installedTerminalCache.terminals
-  }
-
+async function scanInstalledTerminals(): Promise<InstalledTerminal[]> {
   const appRoots = uniquePaths([
     '/Applications',
     '/System/Applications',
     join(homedir(), 'Applications'),
   ])
 
-  const terminals = appRoots
-    .flatMap((root) => discoverAppBundles(root))
-    .flatMap((appPath) => {
-      const terminal = buildInstalledTerminal(appPath)
-      return terminal ? [terminal] : []
-    })
+  const appPaths = uniquePaths((await Promise.all(appRoots.map((root) => discoverAppBundles(root)))).flat())
+  const terminals = (await Promise.all(appPaths.map((appPath) => buildInstalledTerminal(appPath))))
+    .flatMap((terminal) => terminal ? [terminal] : [])
     .reduce<InstalledTerminal[]>((unique, terminal) => {
       if (unique.some((candidate) => candidate.id === terminal.id)) return unique
       unique.push(terminal)
@@ -344,9 +339,32 @@ function getInstalledTerminals(): InstalledTerminal[] {
   return terminals
 }
 
-function findInstalledTerminal(preferredId: PreferredTerminalId | TerminalId | null | undefined): InstalledTerminal | null {
+function refreshInstalledTerminals(): Promise<InstalledTerminal[]> {
+  if (installedTerminalScanPromise) return installedTerminalScanPromise
+
+  installedTerminalScanPromise = scanInstalledTerminals().finally(() => {
+    installedTerminalScanPromise = null
+  })
+
+  return installedTerminalScanPromise
+}
+
+async function getInstalledTerminals(): Promise<InstalledTerminal[]> {
+  if (installedTerminalCache && Date.now() - installedTerminalCache.scannedAt < TERMINAL_DISCOVERY_CACHE_MS) {
+    return installedTerminalCache.terminals
+  }
+
+  if (installedTerminalCache) {
+    void refreshInstalledTerminals()
+    return installedTerminalCache.terminals
+  }
+
+  return refreshInstalledTerminals()
+}
+
+async function findInstalledTerminal(preferredId: PreferredTerminalId | TerminalId | null | undefined): Promise<InstalledTerminal | null> {
   if (!preferredId || preferredId === 'auto') return null
-  return getInstalledTerminals().find((terminal) => terminal.id === preferredId) ?? null
+  return (await getInstalledTerminals()).find((terminal) => terminal.id === preferredId) ?? null
 }
 
 function quoteForShell(input: string): string {
@@ -982,6 +1000,12 @@ function extractHistoryTextContent(content: unknown): string {
   return ''
 }
 
+function parseHistoryTimestamp(value: unknown): number {
+  if (typeof value !== 'string' && typeof value !== 'number') return Date.now()
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : Date.now()
+}
+
 function extractTaggedHistoryValue(text: string, tag: string): string | null {
   const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'))
   if (!match) return null
@@ -1274,14 +1298,14 @@ ipcMain.handle(IPC.LOAD_SESSION, async (_e, arg: { sessionId: string; projectPat
             messages.push({
               role: 'system',
               content: buildCompactionHistoryContent(obj),
-              timestamp: new Date(obj.timestamp || Date.now()).getTime(),
+              timestamp: parseHistoryTimestamp(obj.timestamp),
             })
             return
           }
 
           if (obj.type === 'user') {
             const text = extractHistoryTextContent(obj.message?.content)
-            const timestamp = new Date(obj.timestamp || Date.now()).getTime()
+            const timestamp = parseHistoryTimestamp(obj.timestamp)
             const localCommand = parseLocalCommandHistoryEntry(text)
 
             if (localCommand) {
@@ -1323,14 +1347,14 @@ ipcMain.handle(IPC.LOAD_SESSION, async (_e, arg: { sessionId: string; projectPat
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (block.type === 'text' && block.text) {
-                  messages.push({ role: 'assistant', content: block.text, timestamp: new Date(obj.timestamp).getTime() })
+                  messages.push({ role: 'assistant', content: block.text, timestamp: parseHistoryTimestamp(obj.timestamp) })
                 } else if (block.type === 'tool_use' && block.name) {
                   messages.push({
                     role: 'tool',
                     content: '',
                     toolName: block.name,
                     toolId: block.id || undefined,
-                    timestamp: new Date(obj.timestamp).getTime(),
+                    timestamp: parseHistoryTimestamp(obj.timestamp),
                   })
                 }
               }
@@ -2127,25 +2151,25 @@ ipcMain.handle(IPC.GET_DIAGNOSTICS, () => {
   }
 })
 
-ipcMain.handle(IPC.LIST_INSTALLED_TERMINALS, () => {
-  return getInstalledTerminals().map(({ id, label }) => ({ id, label }))
+ipcMain.handle(IPC.LIST_INSTALLED_TERMINALS, async () => {
+  return (await getInstalledTerminals()).map(({ id, label }) => ({ id, label }))
 })
 
 ipcMain.handle(IPC.OPEN_IN_TERMINAL, async (_event, arg: string | null | { sessionId?: string | null; projectPath?: string; terminalId?: PreferredTerminalId | TerminalId | null }) => {
 
   // Support both old (string) and new ({ sessionId, projectPath }) calling convention
   let sessionId: string | null = null
-  let projectPath: string = process.cwd()
+  let projectPath: string = homedir()
   let terminalId: PreferredTerminalId | TerminalId | null = null
   if (typeof arg === 'string') {
     sessionId = arg
   } else if (arg && typeof arg === 'object') {
     sessionId = arg.sessionId ?? null
-    projectPath = arg.projectPath && arg.projectPath !== '~' ? arg.projectPath : process.cwd()
+    projectPath = arg.projectPath && arg.projectPath !== '~' ? arg.projectPath : homedir()
     terminalId = arg.terminalId ?? null
   }
 
-  const terminal = findInstalledTerminal(terminalId)
+  const terminal = await findInstalledTerminal(terminalId)
   const logLabel = terminal ? terminal.label : terminalId && terminalId !== 'auto' ? `macOS default (fallback from ${terminalId})` : 'macOS default'
 
   try {
@@ -2244,6 +2268,11 @@ app.whenReady().then(async () => {
     log(`Skill ${status.name}: ${status.state}${status.error ? ` — ${status.error}` : ''}`)
     broadcast(IPC.SKILL_STATUS, status)
   }).catch((err: Error) => log(`Skill provisioning error: ${err.message}`))
+
+  void refreshInstalledTerminals().catch((err) => {
+    const message = err instanceof Error ? err.message : String(err)
+    log(`Terminal discovery warmup failed: ${message}`)
+  })
 
   createWindow()
   snapshotWindowState('after createWindow')

@@ -264,6 +264,7 @@ function TerminalLaunchControl({
   const [open, setOpen] = useState(false)
   const [terminals, setTerminals] = useState<TerminalInstallation[]>([])
   const [terminalsLoading, setTerminalsLoading] = useState(false)
+  const popoverId = 'terminal-launch-control-popover'
   const triggerRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ bottom: 0, right: 0 })
@@ -365,8 +366,9 @@ function TerminalLaunchControl({
           className="px-1.5 py-0.5 transition-colors"
           style={{ color: colors.textTertiary }}
           title="Choose terminal app"
-          aria-haspopup="menu"
           aria-expanded={open}
+          aria-controls={popoverId}
+          aria-label="Choose terminal app"
         >
           <CaretDown size={10} style={{ opacity: 0.8 }} />
         </button>
@@ -374,6 +376,7 @@ function TerminalLaunchControl({
 
       {popoverLayer && open && createPortal(
         <motion.div
+          id={popoverId}
           ref={popoverRef}
           data-clui-ui
           initial={{ opacity: 0, y: 4 }}
