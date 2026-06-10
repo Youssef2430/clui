@@ -14,6 +14,10 @@ on:
         description: 'Git tag to build (e.g. v0.1.16). Must already exist.'
         required: true
 
+# Needed to create the GitHub release and upload assets with GITHUB_TOKEN.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
