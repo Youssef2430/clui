@@ -13,6 +13,8 @@ import { getCliEnv } from './cli-env'
 import { autoUpdater } from 'electron-updater'
 import { SearchManager } from './search/search-manager'
 import { IPC, OVERLAY_BAR_WIDTH, OVERLAY_PILL_HEIGHT, OVERLAY_PILL_BOTTOM_MARGIN } from '../shared/types'
+import { isMillionTokenClaudeModel } from '../shared/models'
+import { getClaudeModelSettings } from './claude/settings'
 import type { RunOptions, NormalizedEvent, EnrichedError, BtwOptions, PreferredTerminalId, TerminalId, TerminalInstallation } from '../shared/types'
 
 const DEBUG_MODE = process.env.CLUI_DEBUG === '1'
@@ -840,7 +842,18 @@ ipcMain.handle(IPC.START, async () => {
     if (raw) mcpServers = raw.split('\n').filter(Boolean)
   } catch {}
 
-  return { version, auth, mcpServers, projectPath: process.cwd(), homePath: require('os').homedir() }
+  return {
+    version,
+    auth,
+    mcpServers,
+    projectPath: process.cwd(),
+    homePath: require('os').homedir(),
+    modelSettings: getClaudeModelSettings(),
+  }
+})
+
+ipcMain.handle(IPC.GET_MODEL_SETTINGS, async (_event, arg?: { projectPath?: string }) => {
+  return getClaudeModelSettings(arg?.projectPath)
 })
 
 ipcMain.handle(IPC.CREATE_TAB, () => {
@@ -1638,7 +1651,7 @@ ipcMain.handle(IPC.GET_CONTEXT, async (_e, arg: { sessionId: string; projectPath
     // Total context = all three combined
 
     // Context window size — infer from model name (CLI: aX())
-    const isExtended = model?.includes('[1m]') || model?.includes('opus-4') || model?.includes('sonnet-4')
+    const isExtended = isMillionTokenClaudeModel(model)
     const maxTokens = isExtended ? 1000000 : 200000
 
     // Memory file tokens (from actual file content, char/4)

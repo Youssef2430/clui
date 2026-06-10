@@ -1,15 +1,16 @@
 import { create } from 'zustand'
 import type { TabStatus, NormalizedEvent, EnrichedError, Message, TabState, Attachment, CatalogPlugin, PluginStatus, TodoTask, SearchIndexStatus } from '../../shared/types'
+import { EMPTY_MODEL_SETTINGS, type ClaudeModelSettings } from '../../shared/models'
 import { useThemeStore } from '../theme'
 import notificationSrc from '../../../resources/notification.mp3'
 
-// ─── Known models ───
+// ─── Model settings helpers ───
 
-export const AVAILABLE_MODELS = [
-  { id: 'claude-opus-4-6', label: 'Opus 4.6' },
-  { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-] as const
+export {
+  findModelOption,
+  getModelCommandValues,
+  getModelLabel,
+} from '../../shared/models'
 
 // ─── Persisted permission mode ───
 
@@ -44,6 +45,8 @@ interface State {
   isExpanded: boolean
   /** Global info fetched on startup (not per-session) */
   staticInfo: StaticInfo | null
+  /** Model choices discovered from the user's Claude settings */
+  modelSettings: ClaudeModelSettings
   /** User's preferred model override (null = use default) */
   preferredModel: string | null
   /** Global permission mode: 'ask' shows cards, 'auto' auto-approves all tool calls */
@@ -77,6 +80,7 @@ interface State {
 
   // Actions
   initStaticInfo: () => Promise<void>
+  refreshModelSettings: (projectPath?: string) => Promise<void>
   setPreferredModel: (model: string | null) => void
   setPermissionMode: (mode: 'ask' | 'auto') => void
   createTab: () => Promise<string>
@@ -330,6 +334,9 @@ export const useSessionStore = create<State>((set, get) => ({
   searchPanelOpen: false,
   searchIndexStatus: { state: 'idle' } as SearchIndexStatus,
 
+  // Model settings
+  modelSettings: EMPTY_MODEL_SETTINGS,
+
   // Marketplace
   marketplaceOpen: false,
   marketplaceCatalog: [],
@@ -351,12 +358,20 @@ export const useSessionStore = create<State>((set, get) => ({
           projectPath: result.projectPath || '~',
           homePath: result.homePath || '~',
         },
+        modelSettings: result.modelSettings || EMPTY_MODEL_SETTINGS,
       })
       // Sync persisted permission mode to the main process
       const mode = get().permissionMode
       if (mode !== 'ask') {
         window.clui.setPermissionMode(mode)
       }
+    } catch {}
+  },
+
+  refreshModelSettings: async (projectPath) => {
+    try {
+      const modelSettings = await window.clui.getModelSettings(projectPath)
+      set({ modelSettings: modelSettings || EMPTY_MODEL_SETTINGS })
     } catch {}
   },
 
@@ -839,6 +854,7 @@ export const useSessionStore = create<State>((set, get) => ({
   setBaseDirectory: (dir) => {
     const { activeTabId } = get()
     window.clui.resetTabSession(activeTabId)
+    void get().refreshModelSettings(dir)
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === activeTabId

@@ -422,9 +422,10 @@ export class PermissionServer extends EventEmitter {
    * Generate a per-run settings file with the PreToolUse HTTP hook.
    * The URL includes both appSecret and runToken for authentication.
    */
-  generateSettingsFile(runToken: string): string {
+  generateSettingsFile(runToken: string, env?: Record<string, string>): string {
     const port = this._actualPort || this.port
     const settings = {
+      ...(env && Object.keys(env).length > 0 ? { env } : {}),
       hooks: {
         PreToolUse: [
           {

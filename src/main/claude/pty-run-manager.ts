@@ -200,7 +200,7 @@ function isUiChrome(line: string): boolean {
   if (/^esctointerrupt/i.test(cleaned)) return true
   // Prompt line with hint
   if (/^[❯>]\s*\?\s*for\s*shortcuts/i.test(cleaned)) return true
-  // Status bar fragments: "Opus 4.6 · Claude Max" etc.
+  // Status bar fragments: "Opus 4.x · Claude Max" etc.
   if (/Opus\s*[\d.]+\s*·/i.test(cleaned)) return true
   if (/Claude\s*Max/i.test(cleaned)) return true
   // Settings issue / doctor notice

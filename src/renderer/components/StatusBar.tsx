@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { Terminal, CaretDown, Check, FolderOpen, Plus, X, ShieldCheck } from '@phosphor-icons/react'
-import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
+import { useSessionStore, getModelLabel } from '../stores/sessionStore'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors, useThemeStore } from '../theme'
 import type { PreferredTerminalId, TerminalInstallation } from '../../shared/types'
@@ -14,8 +14,15 @@ function ModelPicker() {
   const setPreferredModel = useSessionStore((s) => s.setPreferredModel)
   const tab = useSessionStore(
     (s) => s.tabs.find((t) => t.id === s.activeTabId),
-    (a, b) => a === b || (!!a && !!b && a.status === b.status && a.sessionModel === b.sessionModel),
+    (a, b) => a === b || (!!a && !!b
+      && a.status === b.status
+      && a.sessionModel === b.sessionModel
+      && a.hasChosenDirectory === b.hasChosenDirectory
+      && a.workingDirectory === b.workingDirectory
+    ),
   )
+  const modelOptions = useSessionStore((s) => s.modelSettings.options)
+  const refreshModelSettings = useSessionStore((s) => s.refreshModelSettings)
   const popoverLayer = usePopoverLayer()
   const colors = useColors()
 
@@ -25,6 +32,13 @@ function ModelPicker() {
   const [pos, setPos] = useState({ bottom: 0, left: 0 })
 
   const isBusy = tab?.status === 'running' || tab?.status === 'connecting'
+  const pickerOptions = preferredModel && !modelOptions.some((option) => option.id === preferredModel)
+    ? [...modelOptions, { id: preferredModel, label: preferredModel }]
+    : modelOptions
+
+  useEffect(() => {
+    void refreshModelSettings(tab?.hasChosenDirectory ? tab.workingDirectory : undefined)
+  }, [refreshModelSettings, tab?.hasChosenDirectory, tab?.workingDirectory])
 
   const updatePos = useCallback(() => {
     if (!triggerRef.current) return
@@ -55,14 +69,12 @@ function ModelPicker() {
 
   const activeLabel = (() => {
     if (preferredModel) {
-      const m = AVAILABLE_MODELS.find((m) => m.id === preferredModel)
-      return m?.label || preferredModel
+      return getModelLabel(preferredModel, modelOptions)
     }
     if (tab?.sessionModel) {
-      const m = AVAILABLE_MODELS.find((m) => m.id === tab.sessionModel)
-      return m?.label || tab.sessionModel
+      return getModelLabel(tab.sessionModel, modelOptions)
     }
-    return AVAILABLE_MODELS[0].label
+    return getModelLabel(null, modelOptions)
   })()
 
   return (
@@ -94,7 +106,7 @@ function ModelPicker() {
             position: 'fixed',
             bottom: pos.bottom,
             left: pos.left,
-            width: 192,
+            width: 260,
             pointerEvents: 'auto',
             background: colors.popoverBg,
             backdropFilter: 'blur(20px)',
@@ -104,20 +116,27 @@ function ModelPicker() {
           }}
         >
           <div className="py-1">
-            {AVAILABLE_MODELS.map((m) => {
-              const isSelected = preferredModel === m.id || (!preferredModel && m.id === AVAILABLE_MODELS[0].id)
+            {pickerOptions.map((m) => {
+              const isSelected = preferredModel === m.id
               return (
                 <button
-                  key={m.id}
+                  key={m.id ?? 'default'}
                   onClick={() => { setPreferredModel(m.id); setOpen(false) }}
-                  className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] transition-colors"
+                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] transition-colors text-left"
                   style={{
                     color: isSelected ? colors.textPrimary : colors.textSecondary,
                     fontWeight: isSelected ? 600 : 400,
                   }}
                 >
-                  {m.label}
-                  {isSelected && <Check size={12} style={{ color: colors.accent }} />}
+                  <span className="min-w-0">
+                    <span className="block truncate">{m.label}</span>
+                    {m.detail && (
+                      <span className="block truncate text-[10px] font-normal" style={{ color: colors.textMuted }}>
+                        {m.detail}
+                      </span>
+                    )}
+                  </span>
+                  {isSelected && <Check size={12} style={{ color: colors.accent, flexShrink: 0 }} />}
                 </button>
               )
             })}

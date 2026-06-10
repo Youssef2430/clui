@@ -4,6 +4,7 @@ import { PtyRunManager } from './pty-run-manager'
 import { PermissionServer, maskSensitiveFields } from '../hooks/permission-server'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
 import { log as _log } from '../logger'
+import { loadClaudeSettingsEnv } from './settings'
 import type {
   TabStatus,
   TabRegistryEntry,
@@ -601,7 +602,7 @@ export class ControlPlane extends EventEmitter {
     if (this.permissionServer.getPort()) {
       const runToken = this.permissionServer.registerRun(tabId, requestId, options.sessionId || null)
       this.runTokens.set(requestId, runToken)
-      const hookSettingsPath = this.permissionServer.generateSettingsFile(runToken)
+      const hookSettingsPath = this.permissionServer.generateSettingsFile(runToken, loadClaudeSettingsEnv(options.projectPath))
       options = { ...options, hookSettingsPath }
     }
 

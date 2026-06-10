@@ -16,10 +16,11 @@ import type {
   PreferredTerminalId,
   TerminalInstallation,
 } from '../shared/types'
+import type { ClaudeModelSettings } from '../shared/models'
 
 export interface CluiAPI {
   // ─── Request-response (renderer → main) ───
-  start(): Promise<{ version: string; auth: { email?: string; subscriptionType?: string; authMethod?: string }; mcpServers: string[]; projectPath: string; homePath: string }>
+  start(): Promise<{ version: string; auth: { email?: string; subscriptionType?: string; authMethod?: string }; mcpServers: string[]; projectPath: string; homePath: string; modelSettings: ClaudeModelSettings }>
   createTab(): Promise<{ tabId: string }>
   prompt(tabId: string, requestId: string, options: RunOptions): Promise<void>
   cancel(requestId: string): Promise<boolean>
@@ -46,6 +47,7 @@ export interface CluiAPI {
   loadSession(sessionId: string, projectPath?: string): Promise<SessionLoadMessage[]>
   getToolResults(sessionId: string, projectPath: string): Promise<Record<string, string>>
   getContext(sessionId: string, projectPath: string, sessionData?: any): Promise<any>
+  getModelSettings(projectPath?: string): Promise<ClaudeModelSettings>
   listDir(dirPath: string): Promise<Array<{ name: string; isDirectory: boolean }>>
   fetchMarketplace(forceRefresh?: boolean): Promise<{ plugins: CatalogPlugin[]; error: string | null }>
   listInstalledPlugins(): Promise<string[]>
@@ -125,6 +127,7 @@ const api: CluiAPI = {
   loadSession: (sessionId: string, projectPath?: string) => ipcRenderer.invoke(IPC.LOAD_SESSION, { sessionId, projectPath }),
   getToolResults: (sessionId: string, projectPath: string) => ipcRenderer.invoke(IPC.GET_TOOL_RESULTS, { sessionId, projectPath }),
   getContext: (sessionId: string, projectPath: string, sessionData?: any) => ipcRenderer.invoke(IPC.GET_CONTEXT, { sessionId, projectPath, sessionData }),
+  getModelSettings: (projectPath?: string) => ipcRenderer.invoke(IPC.GET_MODEL_SETTINGS, { projectPath }),
   listDir: (dirPath: string) => ipcRenderer.invoke(IPC.LIST_DIR, dirPath),
   fetchMarketplace: (forceRefresh) => ipcRenderer.invoke(IPC.MARKETPLACE_FETCH, { forceRefresh }),
   listInstalledPlugins: () => ipcRenderer.invoke(IPC.MARKETPLACE_INSTALLED),

@@ -474,6 +474,7 @@ export const IPC = {
   LOAD_SESSION: 'clui:load-session',
   GET_TOOL_RESULTS: 'clui:get-tool-results',
   GET_CONTEXT: 'clui:get-context',
+  GET_MODEL_SETTINGS: 'clui:get-model-settings',
   LIST_DIR: 'clui:list-dir',
 
   // One-way events (main → renderer)
