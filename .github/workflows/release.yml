@@ -14,9 +14,11 @@ on:
         description: 'Git tag to build (e.g. v0.1.16). Must already exist.'
         required: true
 
-# Needed to create the GitHub release and upload assets with GITHUB_TOKEN.
+# contents: write — create the GitHub release and upload assets
+# actions: write — dispatch the Homebrew tap workflow after publishing
 permissions:
   contents: write
+  actions: write
 
 jobs:
   build:
@@ -77,6 +79,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/verify-update-feed.mjs --tag '${{ inputs.tag }}'
+
+      - name: Update Homebrew tap
+        # Releases created with GITHUB_TOKEN don't fire the release event,
+        # so the tap workflow must be dispatched explicitly from here.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run update-homebrew.yml --repo "$GITHUB_REPOSITORY" -f tag='${{ inputs.tag }}'
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

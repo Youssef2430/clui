@@ -1,8 +1,18 @@
 name: Update Homebrew Tap
 
+# Two triggers on purpose:
+#  - release published: covers releases made locally via release_build.sh
+#  - workflow_dispatch: covers releases made by the release.yml workflow,
+#    whose GITHUB_TOKEN-created release does NOT fire the release event
+#    (GitHub anti-recursion rule), so release.yml dispatches this directly.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish to the tap (e.g. v0.1.16)'
+        required: true
 
 jobs:
   update-cask:
@@ -10,13 +20,30 @@ jobs:
     steps:
       - name: Extract version from tag
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          TAG='${{ inputs.tag || github.ref_name }}'
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download release DMGs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download "${{ github.ref_name }}" \
+          # The release event can fire before assets finish uploading
+          # (release_build.sh creates the release first, then uploads).
+          # Wait until both arch DMGs for this version exist.
+          VERSION='${{ steps.version.outputs.version }}'
+          for i in $(seq 1 30); do
+            assets=$(gh release view "${{ steps.version.outputs.tag }}" \
+              --repo "${{ github.repository }}" \
+              --json assets --jq '[.assets[].name] | join(" ")' 2>/dev/null || echo '')
+            if [[ "$assets" == *"Clui-${VERSION}-arm64.dmg"* && "$assets" == *"Clui-${VERSION}.dmg"* ]]; then
+              break
+            fi
+            echo "DMGs not uploaded yet (attempt $i/30), waiting 30s..."
+            sleep 30
+          done
+          gh release download "${{ steps.version.outputs.tag }}" \
             --repo "${{ github.repository }}" \
             --pattern "*.dmg" \
             --dir artifacts
@@ -70,5 +97,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/clui.rb
-          git commit -m "update clui to ${{ steps.version.outputs.version }}"
-          git push
+          if git diff --staged --quiet; then
+            echo "Cask already up to date — nothing to commit"
+          else
+            git commit -m "update clui to ${{ steps.version.outputs.version }}"
+            git push
+          fi
