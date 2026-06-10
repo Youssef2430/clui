@@ -168,6 +168,12 @@ if [ "$fatal_errors" -gt 0 ]; then
   fail "Verification failed with $fatal_errors fatal error(s). Aborting publish."
 fi
 
+# ─── Verify auto-update artifacts ────────────────────────────────────────────
+header "Verifying update artifacts"
+
+node "$PROJECT_ROOT/scripts/verify-update-artifacts.mjs" --require-both-archs \
+  || fail "Update artifact verification failed. Aborting publish."
+
 ok "All checks passed"
 
 # ─── Publish to GitHub ────────────────────────────────────────────────────────
@@ -208,6 +214,12 @@ gh release upload "$TAG" \
   "${artifacts[@]}"
 
 ok "Published to GitHub"
+
+# ─── Validate the published update feed ──────────────────────────────────────
+header "Validating published update feed"
+
+GITHUB_TOKEN="${GH_TOKEN}" node "$PROJECT_ROOT/scripts/verify-update-feed.mjs" --tag "$TAG" \
+  || fail "Published update feed is broken — fix the release assets before announcing."
 
 # ─── Done ─────────────────────────────────────────────────────────────────────
 header "Done"
