@@ -16,8 +16,8 @@
   --shadow-sm:   0 1px 3px rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.04);
   --shadow-md:   0 4px 16px rgba(0,0,0,.06), 0 1px 4px rgba(0,0,0,.04);
   --shadow-lg:   0 20px 60px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.04);
-  --shadow-hero: 0 30px 80px rgba(0,0,0,.1), 0 8px 24px rgba(0,0,0,.06);
-  --nav-bg:      rgba(250,250,247,.88);
+  --shadow-hero: 0 20px 50px rgba(0,0,0,.07), 0 6px 16px rgba(0,0,0,.04);
+  --nav-bg:      rgba(250,250,247,.85);
   --radius-sm:   6px;
   --radius-md:   12px;
   --radius-lg:   18px;
@@ -33,7 +33,7 @@
   --glass-bg:        rgba(250,249,246,.80);
   --glass-border:    #dddad2;
   --glass-edge:      rgba(255,255,255,.7);
-  --glass-shadow:    0 18px 40px rgba(60,40,30,.16), 0 4px 12px rgba(60,40,30,.10);
+  --glass-shadow:    0 8px 22px rgba(60,40,30,.08), 0 2px 6px rgba(60,40,30,.05);
   --nav-glass-bg:    rgba(252,251,249,.62);
   --nav-inner-edge:  rgba(255,255,255,.55);
   --app-surface:     #edeae0;
@@ -74,8 +74,8 @@
   --shadow-sm:   0 1px 3px rgba(0,0,0,.2), 0 1px 2px rgba(0,0,0,.15);
   --shadow-md:   0 4px 16px rgba(0,0,0,.25), 0 1px 4px rgba(0,0,0,.15);
   --shadow-lg:   0 20px 60px rgba(0,0,0,.35), 0 4px 16px rgba(0,0,0,.2);
-  --shadow-hero: 0 30px 80px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.25);
-  --nav-bg:      rgba(26,26,24,.88);
+  --shadow-hero: 0 20px 50px rgba(0,0,0,.32), 0 6px 16px rgba(0,0,0,.2);
+  --nav-bg:      rgba(26,26,24,.85);
   --accent-glow: rgba(217,119,87,.1);
 
   /* ── App-faithful tokens (mirror src/renderer/theme.ts — dark) ── */
@@ -96,7 +96,7 @@
   --glass-edge:      rgba(255,255,255,.12);
   --glass-highlight: rgba(255,255,255,.08);
   --glass-bg:        rgba(33,33,31,.78);
-  --glass-shadow:    0 18px 44px rgba(0,0,0,.5), 0 4px 14px rgba(0,0,0,.35);
+  --glass-shadow:    0 8px 24px rgba(0,0,0,.32), 0 2px 8px rgba(0,0,0,.22);
   --nav-glass-bg:    rgba(28,28,26,.55);
   --nav-inner-edge:  rgba(255,255,255,.07);
   color-scheme: dark;
@@ -144,31 +144,22 @@ body::before {
 /* Warm gradient-mesh aurora — terracotta light bleeding from the top */
 .hero::before {
   content: '';
-  position: absolute; inset: -20% -10% auto -10%; height: 760px;
+  position: absolute; inset: 0 -10% auto -10%; height: 720px;
   z-index: 0; pointer-events: none;
   background:
-    radial-gradient(60% 50% at 50% 0%,   rgba(217,119,87,.16),  transparent 70%),
-    radial-gradient(40% 45% at 18% 12%,  rgba(212,162,127,.14), transparent 70%),
-    radial-gradient(42% 48% at 84% 8%,   rgba(217,119,87,.10),  transparent 72%);
-  filter: blur(8px);
-  -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
-          mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
-  animation: aurora 18s ease-in-out infinite alternate;
+    radial-gradient(58% 50% at 50% 0%,   rgba(217,119,87,.11),  transparent 72%),
+    radial-gradient(40% 45% at 16% 6%,   rgba(212,162,127,.10), transparent 72%),
+    radial-gradient(42% 48% at 86% 4%,   rgba(217,119,87,.08),  transparent 74%);
+  filter: blur(10px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 50%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 50%, transparent 100%);
+  animation: aurora 20s ease-in-out infinite alternate;
 }
 [data-theme="dark"] .hero::before {
   background:
-    radial-gradient(60% 50% at 50% 0%,   rgba(217,119,87,.22),  transparent 70%),
-    radial-gradient(40% 45% at 18% 12%,  rgba(212,162,127,.12), transparent 70%),
-    radial-gradient(42% 48% at 84% 8%,   rgba(217,119,87,.14),  transparent 72%);
-}
-/* Faint guide lines that frame the hero column */
-.hero::after {
-  content: '';
-  position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    linear-gradient(90deg, transparent calc(50% - 540px), var(--border-soft) calc(50% - 540px), transparent calc(50% - 539px)),
-    linear-gradient(90deg, transparent calc(50% + 539px), var(--border-soft) calc(50% + 539px), transparent calc(50% + 540px));
-  opacity: .6;
+    radial-gradient(58% 50% at 50% 0%,   rgba(217,119,87,.16),  transparent 72%),
+    radial-gradient(40% 45% at 16% 6%,   rgba(212,162,127,.09), transparent 72%),
+    radial-gradient(42% 48% at 86% 4%,   rgba(217,119,87,.10),  transparent 74%);
 }
 .hero > .container { z-index: 1; }
 @keyframes aurora {
@@ -210,7 +201,7 @@ body::before {
 
 /* ─── Nav — floating glass pill ─────────────────────────────── */
 .nav-shell {
-  position: sticky; top: 0; z-index: 100;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
   padding: 14px 20px 0;
   display: flex; justify-content: center;
   pointer-events: none;
@@ -228,15 +219,13 @@ body::before {
           backdrop-filter: blur(20px) saturate(1.8);
   border: 1px solid var(--glass-edge);
   box-shadow:
-    0 10px 30px rgba(40,28,20,.10),
-    0 2px 8px rgba(40,28,20,.06),
+    0 4px 14px rgba(40,28,20,.06),
     inset 0 1px 0 var(--glass-highlight);
   transition: background .4s ease, box-shadow .3s ease, border-color .4s ease;
 }
 [data-theme="dark"] .nav-glass {
   box-shadow:
-    0 10px 30px rgba(0,0,0,.4),
-    0 2px 8px rgba(0,0,0,.3),
+    0 4px 14px rgba(0,0,0,.28),
     inset 0 1px 0 var(--glass-highlight);
 }
 /* Nested inner stroke — the "double glass" edge from the reference */
@@ -250,14 +239,12 @@ body::before {
 .nav-glass.scrolled {
   background: var(--nav-bg);
   box-shadow:
-    0 14px 38px rgba(40,28,20,.14),
-    0 3px 10px rgba(40,28,20,.08),
+    0 6px 18px rgba(40,28,20,.08),
     inset 0 1px 0 var(--glass-highlight);
 }
 [data-theme="dark"] .nav-glass.scrolled {
   box-shadow:
-    0 14px 38px rgba(0,0,0,.5),
-    0 3px 10px rgba(0,0,0,.35),
+    0 6px 18px rgba(0,0,0,.34),
     inset 0 1px 0 var(--glass-highlight);
 }
 
