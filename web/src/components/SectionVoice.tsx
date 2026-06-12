@@ -1,3 +1,6 @@
+'use client'
+
+import { X, Check } from '@phosphor-icons/react'
 import ScrollReveal from './ScrollReveal'
 
 export default function SectionVoice() {
@@ -9,23 +12,27 @@ export default function SectionVoice() {
             <div className="section-label"><span className="section-index">04</span> Voice Input</div>
             <h2 className="section-heading">Speak your intent.<br />Claude <em>listens</em>.</h2>
             <p className="section-sub">
-              Activate voice mode and dictate naturally. Clui transcribes in real time and sends
-              your message the moment you stop speaking. Ideal for long prompts, fast ideas, and
-              hands-free workflows.
+              Tap the mic and dictate naturally. Clui transcribes locally, then drops the text
+              straight into the prompt — confirm with a tap, or cancel and try again. Ideal for
+              long prompts, fast ideas, and hands-free workflows.
             </p>
           </ScrollReveal>
 
           <ScrollReveal delay={0.2}>
             <div className="split-visual">
-              <div className="voice-showcase">
-                <div className="voice-waveform">
-                  {Array.from({ length: 13 }).map((_, i) => (
-                    <div key={i} className="voice-wv-bar" />
-                  ))}
+              {/* The input pill in its recording state — mirrors InputBar voice controls */}
+              <div className="voice-stage">
+                <div className="summon-pill app-glass">
+                  <div className="voice-waveform">
+                    {Array.from({ length: 13 }).map((_, i) => (
+                      <div key={i} className="voice-wv-bar" />
+                    ))}
+                  </div>
+                  <button className="summon-circle-btn voice-cancel" title="Cancel"><X size={15} weight="bold" /></button>
+                  <button className="summon-send" title="Confirm"><Check size={15} weight="bold" /></button>
                 </div>
-                <div className="voice-label">
-                  <div className="voice-label-dot" />
-                  Listening&hellip;
+                <div className="voice-meta">
+                  <span className="voice-label"><span className="voice-label-dot" />Recording — ✓ to confirm, ✕ to cancel</span>
                 </div>
                 <div className="voice-transcript">
                   &ldquo;Refactor the login flow to use refresh tokens and update the middleware to validate expiry on every request.&rdquo;

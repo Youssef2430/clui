@@ -1,3 +1,6 @@
+'use client'
+
+import { ShieldWarning, Terminal } from '@phosphor-icons/react'
 import ScrollReveal from './ScrollReveal'
 
 export default function SectionPermissions() {
@@ -17,28 +20,25 @@ export default function SectionPermissions() {
 
           <ScrollReveal delay={0.2}>
             <div className="split-visual">
-              <div className="perm-card-showcase">
+              {/* Faithful recreation of Clui's in-app PermissionCard */}
+              <div className="perm-card app-glass">
                 <div className="perm-card-header">
-                  <div className="perm-card-icon-wrap">⚠️</div>
-                  <div>
-                    <div className="perm-card-title">Permission Required</div>
-                    <div className="perm-card-subtitle">Claude wants to write a file</div>
+                  <ShieldWarning size={12} weight="fill" />
+                  <span>Permission Required</span>
+                </div>
+                <div className="perm-card-body">
+                  <div className="perm-card-tool">
+                    <Terminal size={14} />
+                    <span className="perm-card-tool-name">Bash</span>
+                  </div>
+                  <p className="perm-card-desc">Run a shell command in your project directory</p>
+                  <pre className="perm-card-code">git push origin main --force-with-lease</pre>
+                  <div className="perm-card-actions">
+                    <button className="perm-pill perm-pill-allow">Allow</button>
+                    <button className="perm-pill perm-pill-allow-session">Allow for session</button>
+                    <button className="perm-pill perm-pill-deny">Deny</button>
                   </div>
                 </div>
-                <div className="perm-card-path">
-                  <span className="perm-card-path-icon">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                      <polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                  </span>
-                  src/auth.ts
-                </div>
-                <div className="perm-card-actions">
-                  <button className="perm-card-btn perm-card-btn-allow">Allow</button>
-                  <button className="perm-card-btn perm-card-btn-deny">Deny</button>
-                </div>
-                <div className="perm-card-note">Always allow for this project &rarr;</div>
               </div>
             </div>
           </ScrollReveal>

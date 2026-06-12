@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { Paperclip, Camera, HeadCircuit, Microphone, ArrowUp } from '@phosphor-icons/react'
 import ScrollReveal from './ScrollReveal'
 
 export default function SectionSummon() {
@@ -45,20 +46,18 @@ export default function SectionSummon() {
 
           <ScrollReveal delay={0.2}>
             <div className="split-visual">
+              {/* Faithful recreation of Clui's floating input pill + stacked circle buttons */}
               <div className="summon-stage">
-                <div className="summon-overlay">
-                  <div className="summon-bar">
-                    <span className="summon-icon">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M5 12h14M13 6l6 6-6 6" />
-                      </svg>
-                    </span>
-                    <span className="summon-input">Ask Claude anything<span className="summon-caret" /></span>
-                    <span className="summon-return">⏎</span>
+                <div className="summon-row">
+                  <div className="summon-circles">
+                    <button className="summon-circle app-glass" title="Skills"><HeadCircuit size={17} /></button>
+                    <button className="summon-circle app-glass" title="Screenshot"><Camera size={17} /></button>
+                    <button className="summon-circle app-glass" title="Attach"><Paperclip size={17} /></button>
                   </div>
-                  <div className="summon-suggest">
-                    <span className="summon-suggest-dot" />
-                    Summoned above every window — no dock icon, no trace
+                  <div className="summon-pill app-glass">
+                    <span className="summon-pill-text">Ask Claude Code anything…<span className="summon-caret" /></span>
+                    <button className="summon-mic" title="Voice"><Microphone size={16} /></button>
+                    <button className="summon-send" title="Send"><ArrowUp size={16} weight="bold" /></button>
                   </div>
                 </div>
 
@@ -68,7 +67,7 @@ export default function SectionSummon() {
                     <span className="kbd-plus-lg">+</span>
                     <div ref={spaceRef} className="kbd-key key-space">Space</div>
                   </div>
-                  <div className="kbd-hint">Option + Space</div>
+                  <div className="kbd-hint">Summon from anywhere · no dock icon, no trace</div>
                 </div>
               </div>
             </div>
