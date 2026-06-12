@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { Paperclip, Camera, HeadCircuit, Microphone, ArrowUp } from '@phosphor-icons/react'
 import ScrollReveal from './ScrollReveal'
 
 export default function SectionSummon() {
@@ -35,8 +36,8 @@ export default function SectionSummon() {
       <div className="container">
         <div className="split-inner">
           <ScrollReveal className="split-text">
-            <div className="section-label">The Overlay</div>
-            <h2 className="section-heading">Press two keys.<br />Claude appears.</h2>
+            <div className="section-label"><span className="section-index">01</span> The Overlay</div>
+            <h2 className="section-heading">Press two keys.<br />Claude <em>appears</em>.</h2>
             <p className="section-sub">
               Option+Space summons Clui above every window, every app, wherever you are.
               Same shortcut sends it away. It leaves no trace — no dock icon, no menu clutter.
@@ -45,13 +46,29 @@ export default function SectionSummon() {
 
           <ScrollReveal delay={0.2}>
             <div className="split-visual">
-              <div className="kbd-showcase">
-                <div className="kbd-row">
-                  <div ref={optRef} className="kbd-key key-option">⌥</div>
-                  <span className="kbd-plus-lg">+</span>
-                  <div ref={spaceRef} className="kbd-key key-space">Space</div>
+              {/* Faithful recreation of Clui's floating input pill + stacked circle buttons */}
+              <div className="summon-stage">
+                <div className="summon-row">
+                  <div className="summon-circles">
+                    <button className="summon-circle app-glass" title="Skills"><HeadCircuit size={17} /></button>
+                    <button className="summon-circle app-glass" title="Screenshot"><Camera size={17} /></button>
+                    <button className="summon-circle app-glass" title="Attach"><Paperclip size={17} /></button>
+                  </div>
+                  <div className="summon-pill app-glass">
+                    <span className="summon-pill-text">Ask Claude Code anything…<span className="summon-caret" /></span>
+                    <button className="summon-mic" title="Voice"><Microphone size={16} /></button>
+                    <button className="summon-send" title="Send"><ArrowUp size={16} weight="bold" /></button>
+                  </div>
                 </div>
-                <div className="kbd-hint">Option + Space</div>
+
+                <div className="kbd-showcase">
+                  <div className="kbd-row">
+                    <div ref={optRef} className="kbd-key key-option">⌥</div>
+                    <span className="kbd-plus-lg">+</span>
+                    <div ref={spaceRef} className="kbd-key key-space">Space</div>
+                  </div>
+                  <div className="kbd-hint">Summon from anywhere · no dock icon, no trace</div>
+                </div>
               </div>
             </div>
           </ScrollReveal>

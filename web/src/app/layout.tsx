@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { DM_Mono } from 'next/font/google'
+import { DM_Mono, Newsreader, Hanken_Grotesk } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
@@ -7,6 +7,23 @@ const dmMono = DM_Mono({
   subsets: ['latin'],
   weight: ['300', '400', '500'],
   variable: '--font-dm-mono',
+  display: 'swap',
+})
+
+// Editorial serif — stands in for Tiempos. Includes italics for the accent words.
+const newsreader = Newsreader({
+  subsets: ['latin'],
+  weight: ['200', '300', '400', '500'],
+  style: ['normal', 'italic'],
+  variable: '--font-newsreader',
+  display: 'swap',
+})
+
+// Refined grotesque for UI — stands in for Styrene.
+const hanken = Hanken_Grotesk({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-hanken',
   display: 'swap',
 })
 
@@ -39,7 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className={dmMono.variable}>
+      <body className={`${dmMono.variable} ${newsreader.variable} ${hanken.variable}`}>
         {children}
         <Analytics />
       </body>

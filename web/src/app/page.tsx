@@ -75,8 +75,8 @@ export default async function Home() {
       <section className="install-section" id="install" style={{ padding: '96px 0' }}>
         <div className="container">
           <ScrollReveal>
-            <div className="section-label">Get started</div>
-            <h2 className="section-heading">Up in 30 seconds.</h2>
+            <div className="section-label"><span className="section-index">06</span> Get started</div>
+            <h2 className="section-heading">Up in <em>30 seconds</em>.</h2>
             <p className="section-sub">Install via Homebrew — the same way you install everything else on your Mac. No accounts, no sign-ups, no subscriptions. Just one command and you're ready to go.</p>
           </ScrollReveal>
           <div className="install-row">

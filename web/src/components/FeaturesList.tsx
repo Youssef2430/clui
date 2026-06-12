@@ -50,20 +50,25 @@ export default function FeaturesList() {
     <section className="features-list-section" id="features">
       <div className="container">
         <ScrollReveal className="features-list-header">
-          <div className="section-label">Everything else</div>
-          <h2 className="section-heading">Built to go the distance.</h2>
+          <div className="section-label"><span className="section-index">05</span> Everything else</div>
+          <h2 className="section-heading">Built to <em>go the distance</em>.</h2>
           <p className="section-sub" style={{ maxWidth: 460 }}>Every detail has earned its place. Nothing shipped until it felt right.</p>
         </ScrollReveal>
 
-        <div className="features-list">
-          {FEATURES.map((f, i) => (
-            <ScrollReveal key={f.name} delay={(i % 3 + 1) * 0.1} className="feature-row">
-              <div className="feature-row-icon">{f.icon}</div>
-              <div className="feature-row-name">{f.name}</div>
-              <div className="feature-row-desc">{f.desc}</div>
-            </ScrollReveal>
-          ))}
-        </div>
+        <ScrollReveal>
+          <div className="features-grid">
+            {FEATURES.map((f, i) => (
+              <div key={f.name} className="feature-card">
+                <div className="feature-card-head">
+                  <div className="feature-card-icon">{f.icon}</div>
+                  <span className="feature-card-num">{String(i + 1).padStart(2, '0')}</span>
+                </div>
+                <div className="feature-card-name">{f.name}</div>
+                <div className="feature-card-desc">{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </ScrollReveal>
       </div>
     </section>
   )

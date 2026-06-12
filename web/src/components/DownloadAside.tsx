@@ -47,7 +47,7 @@ export default function DownloadAside({ arm64Url, x64Url }: Props) {
 
   return (
     <ScrollReveal delay={0.2} className="download-aside">
-      <div className="download-aside-inner">
+      <div className="download-aside-inner app-glass">
         <p className="download-aside-label">Or download directly</p>
         <p className="download-aside-sub">
           Grab the <strong>.dmg</strong> and drag Clui into Applications — same result, no Homebrew needed.

@@ -7,7 +7,7 @@ export default function Callout() {
         <ScrollReveal>
           <div className="callout-inner">
             <div className="callout-eyebrow">Free &amp; Open Source</div>
-            <h2 className="callout-heading">Your terminal just got a window.</h2>
+            <h2 className="callout-heading">Your terminal just got a <em>window</em>.</h2>
             <p className="callout-sub">
               No subscription. No API key. No drama.<br />
               Just a quieter way to work with Claude.
