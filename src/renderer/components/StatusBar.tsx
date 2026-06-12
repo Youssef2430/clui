@@ -131,7 +131,7 @@ function ModelPicker() {
                   <span className="min-w-0">
                     <span className="block truncate">{m.label}</span>
                     {m.detail && (
-                      <span className="block truncate text-[10px] font-normal" style={{ color: colors.textMuted }}>
+                      <span className="block truncate text-[10px] font-normal" style={{ color: colors.textTertiary }}>
                         {m.detail}
                       </span>
                     )}

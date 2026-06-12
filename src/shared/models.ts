@@ -58,7 +58,8 @@ export function isMillionTokenClaudeModel(model: string | null | undefined): boo
     normalized === 'opus' ||
     normalized === 'sonnet' ||
     normalized.includes('opus-4') ||
-    normalized.includes('sonnet-4')
+    normalized.includes('sonnet-4') ||
+    normalized.includes('fable')
   )
 }
 

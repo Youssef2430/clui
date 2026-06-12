@@ -9,6 +9,12 @@ type ClaudeSettingsFile = {
 
 const DEFAULT_MODEL_ENV = [
   {
+    envKey: 'ANTHROPIC_DEFAULT_FABLE_MODEL',
+    id: 'fable',
+    label: 'Fable default',
+    aliases: ['fable', 'default fable'],
+  },
+  {
     envKey: 'ANTHROPIC_DEFAULT_OPUS_MODEL',
     id: 'opus',
     label: 'Opus default',
