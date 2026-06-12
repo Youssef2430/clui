@@ -6,8 +6,8 @@ export default function SectionVoice() {
       <div className="container">
         <div className="split-inner reversed">
           <ScrollReveal className="split-text">
-            <div className="section-label">Voice Input</div>
-            <h2 className="section-heading">Speak your intent.<br />Claude listens.</h2>
+            <div className="section-label"><span className="section-index">04</span> Voice Input</div>
+            <h2 className="section-heading">Speak your intent.<br />Claude <em>listens</em>.</h2>
             <p className="section-sub">
               Activate voice mode and dictate naturally. Clui transcribes in real time and sends
               your message the moment you stop speaking. Ideal for long prompts, fast ideas, and

@@ -6,8 +6,8 @@ export default function SectionPermissions() {
       <div className="container">
         <div className="split-inner reversed">
           <ScrollReveal className="split-text">
-            <div className="section-label">Permissions</div>
-            <h2 className="section-heading">Every action,<br />your approval.</h2>
+            <div className="section-label"><span className="section-index">02</span> Permissions</div>
+            <h2 className="section-heading">Every action,<br /><em>your</em> approval.</h2>
             <p className="section-sub">
               Clui intercepts every write, delete, and shell command before it touches your system.
               Review it, approve it, or deny it in one click. Set permanent rules per project so

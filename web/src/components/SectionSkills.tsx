@@ -15,8 +15,8 @@ export default function SectionSkills() {
       <div className="container">
         <div className="split-inner">
           <ScrollReveal className="split-text">
-            <div className="section-label">Skills Marketplace</div>
-            <h2 className="section-heading">Your workflows,<br />packaged as skills.</h2>
+            <div className="section-label"><span className="section-index">03</span> Skills Marketplace</div>
+            <h2 className="section-heading">Your workflows,<br />packaged as <em>skills</em>.</h2>
             <p className="section-sub">
               Browse the community marketplace or author your own. Git flows, code review prompts,
               deploy scripts, test runners — all accessible as slash commands the moment they&apos;re installed.
