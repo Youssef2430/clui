@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import Image from 'next/image'
 
 export default function Nav() {
-  const navRef = useRef<HTMLElement>(null)
+  const glassRef = useRef<HTMLDivElement>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
   // Read initial theme from html attr (set by inline script)
@@ -19,13 +19,14 @@ export default function Nav() {
     return () => observer.disconnect()
   }, [])
 
-  // Nav shadow on scroll
+  // Strengthen the glass once the page scrolls
   useEffect(() => {
-    const nav = navRef.current
-    if (!nav) return
+    const glass = glassRef.current
+    if (!glass) return
     const handler = () => {
-      nav.style.boxShadow = window.scrollY > 20 ? '0 1px 8px rgba(0,0,0,.06)' : 'none'
+      glass.classList.toggle('scrolled', window.scrollY > 20)
     }
+    handler()
     window.addEventListener('scroll', handler, { passive: true })
     return () => window.removeEventListener('scroll', handler)
   }, [])
@@ -45,31 +46,19 @@ export default function Nav() {
   const isDark = theme === 'dark'
 
   return (
-    <nav
-      ref={navRef}
-      style={{
-        position: 'sticky', top: 0, zIndex: 100,
-        background: 'var(--nav-bg)',
-        backdropFilter: 'blur(18px) saturate(1.4)',
-        WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
-        borderBottom: '1px solid var(--border-soft)',
-        transition: 'background .4s ease, border-color .4s ease',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 58, maxWidth: 1080, margin: '0 auto', padding: '0 32px' }}>
+    <nav className="nav-shell">
+      <div className="nav-glass" ref={glassRef}>
 
         {/* Logo */}
-        <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
+        <a href="#" className="nav-logo">
           <div className="nav-logo-mark">
             <Image src="/icon-100.png" alt="Clui" width={26} height={26} />
           </div>
-          <span style={{ fontFamily: 'var(--sans)', fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-.01em', transition: 'color .4s ease' }}>
-            Clui
-          </span>
+          <span>Clui</span>
         </a>
 
-        {/* Links */}
-        <ul style={{ display: 'flex', alignItems: 'center', gap: 28, listStyle: 'none' }}>
+        {/* Links + controls */}
+        <ul className="nav-cluster">
           {[
             { label: 'Overlay', id: '#summon' },
             { label: 'Permissions', id: '#permissions' },
@@ -77,13 +66,7 @@ export default function Nav() {
             { label: 'Install', id: '#install' },
           ].map(({ label, id }) => (
             <li key={id} style={{ display: 'none' }} className="nav-link-item">
-              <a
-                href={id}
-                onClick={(e) => smoothScroll(e, id)}
-                style={{ fontFamily: 'var(--sans)', fontSize: 13.5, color: 'var(--text-mid)', textDecoration: 'none', fontWeight: 400, transition: 'color .2s' }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-mid)')}
-              >
+              <a href={id} onClick={(e) => smoothScroll(e, id)} className="nav-link-a">
                 {label}
               </a>
             </li>
@@ -93,27 +76,13 @@ export default function Nav() {
               href="https://github.com/Youssef2430/clui"
               target="_blank"
               rel="noopener"
-              style={{ fontFamily: 'var(--sans)', fontSize: 13.5, color: 'var(--text-mid)', textDecoration: 'none', transition: 'color .2s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-mid)')}
+              className="nav-link-a"
             >
               GitHub ↗
             </a>
           </li>
           <li>
-            <button
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-              style={{
-                width: 34, height: 34, borderRadius: '50%',
-                border: 'none', background: 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', transition: 'opacity .2s, transform .2s',
-                opacity: .7,
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.1)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '.7'; (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)' }}
-            >
+            <button onClick={toggleTheme} aria-label="Toggle theme" className="nav-icon-btn">
               {isDark ? (
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-mid)" strokeWidth="1.8" strokeLinecap="round">
                   <circle cx="12" cy="12" r="5"/>
@@ -130,18 +99,7 @@ export default function Nav() {
             </button>
           </li>
           <li>
-            <a
-              href="#install"
-              onClick={(e) => smoothScroll(e, '#install')}
-              style={{
-                fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 500,
-                color: 'var(--bg)', background: 'var(--text)',
-                padding: '7px 16px', borderRadius: 20,
-                textDecoration: 'none', transition: 'background .2s',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'var(--text)')}
-            >
+            <a href="#install" onClick={(e) => smoothScroll(e, '#install')} className="nav-cta">
               Download free
             </a>
           </li>

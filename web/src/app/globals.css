@@ -34,6 +34,8 @@
   --glass-border:    #dddad2;
   --glass-edge:      rgba(255,255,255,.7);
   --glass-shadow:    0 18px 40px rgba(60,40,30,.16), 0 4px 12px rgba(60,40,30,.10);
+  --nav-glass-bg:    rgba(252,251,249,.62);
+  --nav-inner-edge:  rgba(255,255,255,.55);
   --app-surface:     #edeae0;
   --app-surface-2:   #dddad2;
   --app-hover:       rgba(0,0,0,.04);
@@ -95,6 +97,8 @@
   --glass-highlight: rgba(255,255,255,.08);
   --glass-bg:        rgba(33,33,31,.78);
   --glass-shadow:    0 18px 44px rgba(0,0,0,.5), 0 4px 14px rgba(0,0,0,.35);
+  --nav-glass-bg:    rgba(28,28,26,.55);
+  --nav-inner-edge:  rgba(255,255,255,.07);
   color-scheme: dark;
 }
 
@@ -204,7 +208,93 @@ body::before {
 .reveal-delay-3 { transition-delay: .3s; }
 .reveal-delay-4 { transition-delay: .4s; }
 
-/* ─── Nav ───────────────────────────────────────────────────── */
+/* ─── Nav — floating glass pill ─────────────────────────────── */
+.nav-shell {
+  position: sticky; top: 0; z-index: 100;
+  padding: 14px 20px 0;
+  display: flex; justify-content: center;
+  pointer-events: none;
+}
+.nav-glass {
+  pointer-events: auto;
+  position: relative;
+  width: 100%; max-width: 1080px;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 8px 0 16px;
+  border-radius: 999px;
+  background: var(--nav-glass-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+          backdrop-filter: blur(20px) saturate(1.8);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    0 10px 30px rgba(40,28,20,.10),
+    0 2px 8px rgba(40,28,20,.06),
+    inset 0 1px 0 var(--glass-highlight);
+  transition: background .4s ease, box-shadow .3s ease, border-color .4s ease;
+}
+[data-theme="dark"] .nav-glass {
+  box-shadow:
+    0 10px 30px rgba(0,0,0,.4),
+    0 2px 8px rgba(0,0,0,.3),
+    inset 0 1px 0 var(--glass-highlight);
+}
+/* Nested inner stroke — the "double glass" edge from the reference */
+.nav-glass::after {
+  content: ''; position: absolute; inset: 3px;
+  border-radius: 999px; pointer-events: none;
+  border: 1px solid var(--nav-inner-edge);
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 80%);
+          mask-image: linear-gradient(to bottom, #000, transparent 80%);
+}
+.nav-glass.scrolled {
+  background: var(--nav-bg);
+  box-shadow:
+    0 14px 38px rgba(40,28,20,.14),
+    0 3px 10px rgba(40,28,20,.08),
+    inset 0 1px 0 var(--glass-highlight);
+}
+[data-theme="dark"] .nav-glass.scrolled {
+  box-shadow:
+    0 14px 38px rgba(0,0,0,.5),
+    0 3px 10px rgba(0,0,0,.35),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+.nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; padding-right: 8px; }
+.nav-logo span { font-family: var(--sans); font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -.01em; transition: color .4s ease; }
+.nav-cluster { display: flex; align-items: center; gap: 4px; list-style: none; }
+.nav-link-a {
+  font-family: var(--sans); font-size: 13px; font-weight: 500;
+  color: var(--text-mid); text-decoration: none;
+  padding: 7px 13px; border-radius: 999px;
+  border: 1px solid transparent;
+  transition: color .18s, background .18s, border-color .18s;
+}
+.nav-link-a:hover {
+  color: var(--text);
+  background: var(--glass-highlight);
+  border-color: var(--nav-inner-edge);
+}
+.nav-icon-btn {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid transparent; background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; opacity: .75;
+  transition: opacity .18s, background .18s, border-color .18s, transform .2s var(--ease-out);
+}
+.nav-icon-btn:hover { opacity: 1; background: var(--glass-highlight); border-color: var(--nav-inner-edge); transform: scale(1.05); }
+.nav-cta {
+  font-family: var(--sans); font-size: 13px; font-weight: 600;
+  color: #fff; text-decoration: none;
+  padding: 8px 16px; border-radius: 999px; margin-left: 4px;
+  background: linear-gradient(180deg, #e08a6e, var(--accent));
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 1px 2px rgba(120,60,40,.25), inset 0 1px 0 rgba(255,255,255,.22);
+  transition: background .2s, transform .2s var(--ease-out), box-shadow .2s;
+}
+.nav-cta:hover { background: linear-gradient(180deg, var(--accent), var(--accent-dim)); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(217,119,87,.35), inset 0 1px 0 rgba(255,255,255,.22); }
+
 .nav-logo-mark {
   width: 26px; height: 26px;
   border-radius: 7px;
