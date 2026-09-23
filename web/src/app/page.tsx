@@ -31,8 +31,12 @@ export default function Home() {
               feels at home on your Mac.
             </p>
             <div className="hero-actions">
-              <a className="button-primary" href="#install">
-                <Icon name="apple" size={18} /> Get GLUI for Mac{" "}
+              <a
+                className="button-primary"
+                href="/download?arch=arm64"
+                aria-label="Download GLUI for Mac (Apple Silicon)"
+              >
+                <Icon name="apple" size={18} /> Download for Mac{" "}
                 <Icon name="arrow-down" size={16} />
               </a>
               <a
@@ -45,8 +49,9 @@ export default function Home() {
               </a>
             </div>
             <p className="hero-meta">
-              Free & open source <span>·</span> Your agents. Your existing
-              logins.
+              Apple Silicon <span>·</span>{" "}
+              <a href="/download?arch=x64">Download for Intel</a> <span>·</span>{" "}
+              Free & open source
             </p>
           </div>
           <div className="hero-scene">

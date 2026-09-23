@@ -44,21 +44,27 @@ export default function Install() {
           <br />
           GLUI brings it all together.
         </p>
-        <a
-          className="button-primary"
-          href="https://github.com/Youssef2430/clui/releases"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <Icon name="apple" size={18} /> Browse Mac releases{" "}
-          <Icon name="arrow-up-right" size={16} />
+        <a className="button-primary" href="/download?arch=arm64">
+          <Icon name="apple" size={18} /> Download for Apple Silicon{" "}
+          <Icon name="arrow-down" size={16} />
+        </a>
+        <a className="intel-download" href="/download?arch=x64">
+          Have an Intel Mac?{" "}
+          <span>
+            Download for Intel <Icon name="arrow-right" size={13} />
+          </span>
         </a>
         <span className="install-note">macOS 13+ · Free & open source</span>
       </div>
       <div className="source-install">
         <div className="source-header">
-          <span>
-            <Icon name="terminal" size={17} /> Build it yourself
+          <span className="terminal-lights" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="source-title">
+            <Icon name="terminal" size={13} /> clui — zsh
           </span>
           <button
             className="copy-button"
@@ -69,14 +75,45 @@ export default function Install() {
             <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
           </button>
         </div>
-        <pre tabIndex={0} aria-label="Source installation commands">
+        <pre tabIndex={0} aria-label="Terminal example: build GLUI from source">
           <code>
+            <span className="shell-comment"># Make yourself at home.</span>
             {commands.split("\n").map((line, i) => (
               <span className="code-line" key={line}>
-                <span className="line-number" aria-hidden="true">
-                  0{i + 1}
+                <span className="shell-command">
+                  <span className="shell-prompt" aria-hidden="true">
+                    {i < 2 ? "~" : "clui"} <span>%</span>
+                  </span>{" "}
+                  <span>
+                    <span className="shell-executable">
+                      {line.split(" ")[0]}
+                    </span>
+                    {line.slice(line.indexOf(" "))}
+                  </span>
                 </span>
-                {line}
+                {i === 0 && (
+                  <span className="shell-output">
+                    Cloning into &apos;clui&apos;…
+                  </span>
+                )}
+                {i === 2 && (
+                  <span className="shell-output">
+                    {
+                      "> electron-builder install-app-deps && bash scripts/patch-dev-icon.sh"
+                    }
+                  </span>
+                )}
+                {i === 3 && (
+                  <span className="shell-output">
+                    {"> node scripts/workspace.mjs install"}
+                  </span>
+                )}
+                {i === 4 && (
+                  <span className="shell-output shell-running">
+                    {"> npm run build:workspace && npm run dev:overlay"}
+                    <span className="shell-cursor" aria-hidden="true" />
+                  </span>
+                )}
               </span>
             ))}
           </code>
@@ -87,6 +124,7 @@ export default function Install() {
           </p>
         )}
         <div className="source-notes">
+          <h3>Prefer to build it yourself?</h3>
           <p>
             Requires Node.js 24.13.1+, Rust 1.95+, and Xcode command line tools.{" "}
             <a

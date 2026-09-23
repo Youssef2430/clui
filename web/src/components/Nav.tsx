@@ -49,8 +49,12 @@ export default function Nav() {
           >
             <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
           </button>
-          <a href="#install" className="nav-cta">
-            Get GLUI <Icon name="arrow-down" size={13} />
+          <a
+            href="/download?arch=arm64"
+            className="nav-cta"
+            aria-label="Download GLUI for Mac (Apple Silicon)"
+          >
+            Download <Icon name="arrow-down" size={13} />
           </a>
         </div>
       </nav>
