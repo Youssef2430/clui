@@ -23,7 +23,6 @@ import type { GlassUpdate } from '../shared/glass'
 
 export interface GLUIAPI {
   getWorkspaceInfo(directory: string): Promise<{ branch: string | null; root: string | null }>
-  openWorkspace(tabId?: string): Promise<void>
   attachThread(tabId: string, sessionId: string): Promise<void>
   forkThread(tabId: string): Promise<{ tabId: string; sessionId: string; provider: ProviderId; projectPath: string }>
   workspaceHistory(provider?: ProviderId, projectPath?: string): Promise<SessionMeta[]>
@@ -113,7 +112,6 @@ export interface GLUIAPI {
 const api: GLUIAPI = {
   // ─── Request-response ───
   getWorkspaceInfo: (directory) => ipcRenderer.invoke(IPC.WORKSPACE_INFO, directory),
-  openWorkspace: (tabId) => ipcRenderer.invoke(IPC.OPEN_WORKSPACE, tabId),
   attachThread: (tabId, sessionId) => ipcRenderer.invoke(IPC.ATTACH_THREAD, { tabId, sessionId }),
   forkThread: (tabId) => ipcRenderer.invoke(IPC.FORK_THREAD, tabId),
   workspaceHistory: (provider, projectPath) => ipcRenderer.invoke(IPC.WORKSPACE_HISTORY, provider, projectPath),

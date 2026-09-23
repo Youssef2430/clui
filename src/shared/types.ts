@@ -1,4 +1,4 @@
-import type { PillModelOptions, PillRuntimeMode } from "../../orchestrator/packages/shared/src/gluiPill"
+import type { PillContextChange, PillModelOptions, PillRuntimeMode } from "../../orchestrator/packages/shared/src/gluiPill"
 import type { ProviderId } from './providers'
 // ─── Claude Code Stream Event Types (verified from v2.1.63) ───
 
@@ -266,6 +266,7 @@ export interface Message {
   timestamp: number
   /** Attachments sent with this user message (images / files) */
   attachments?: Attachment[]
+  contextChange?: PillContextChange
 }
 
 export interface RunResult {
@@ -472,7 +473,6 @@ export const OVERLAY_PILL_BOTTOM_MARGIN = 24
 export const IPC = {
   WORKSPACE_INFO: 'glui:workspace-info',
   THREAD_SNAPSHOT: 'glui:thread-snapshot',
-  OPEN_WORKSPACE: 'glui:open-workspace',
   ATTACH_THREAD: 'glui:attach-thread',
   FORK_THREAD: 'glui:fork-thread',
   WORKSPACE_HISTORY: 'glui:workspace-history',

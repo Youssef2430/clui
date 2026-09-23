@@ -24,6 +24,7 @@
     "test": "tsx --test tests/*.test.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "smoke:electron": "node scripts/smoke-electron.mjs",
+    "smoke:pill-ui": "node scripts/smoke-pill-ui.mjs",
     "dist:local": "node scripts/workspace.mjs package",
     "dev:overlay": "npm run build:glass && unset ELECTRON_RUN_AS_NODE && electron-vite dev",
     "build:overlay": "npm run build:glass && electron-vite build",

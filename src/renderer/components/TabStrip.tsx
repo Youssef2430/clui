@@ -1,7 +1,7 @@
 import { ProviderPicker } from './ProviderPicker'
 import React, { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, X, Minus, ArrowsClockwise, ArrowsOut, GitBranch } from '@phosphor-icons/react'
+import { Plus, X, Minus, ArrowsClockwise, GitBranch } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { HistoryPicker } from './HistoryPicker'
 import { SettingsPopover } from './SettingsPopover'
@@ -169,14 +169,6 @@ export function TabStrip() {
           className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors disabled:opacity-30"
           style={{ color: colors.textTertiary }}
         ><GitBranch size={14} /></button>
-        <button
-          data-glui-ui
-          aria-label="Open workspace"
-          title="Open workspace — branches, schedules, source control, and more"
-          onClick={() => window.glui.openWorkspace(activeTabId).catch(error => useSessionStore.getState().addSystemMessage(String(error)))}
-          className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
-          style={{ color: colors.textTertiary }}
-        ><ArrowsOut size={14} /></button>
         <HistoryPicker />
 
         <SettingsPopover />

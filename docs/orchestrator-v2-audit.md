@@ -5,19 +5,19 @@ GLUI now bundles the implementation of [T3 Code PR #2829](https://github.com/pin
 | Feature | GLUI entry point | Implementation |
 | --- | --- | --- |
 | Claude Code, Codex, OpenCode | Composer agent/model menu | V2 native provider adapters |
-| Conversation branching | Pill branch button; workspace run actions | Source-run fork, native/fallback continuation, inherited history |
+| Conversation branching | Pill branch button | Source-run fork, native/fallback continuation, inherited history |
 | Cross-provider handoff | Choose another agent in the same conversation | ProviderSwitchService and ContextHandoffService |
-| Merge-back | Workspace branch actions | V2 merge-back execution and checkpoint integration |
-| Scheduling | Workspace scheduled tasks | Persisted interval/fixed-time schedules, weekdays, run-now, history and enable/disable |
-| Delegation and native subagents | Workspace and orchestration tools | Orchestrator MCP toolkit, child execution graphs, pending interactions |
-| Durable commands and execution | Shared by both windows | SQLite event store, command receipts, effect outbox, runs/attempts/nodes |
-| Queues and steering | Pill queues; workspace detailed controls | Persisted run queue and native/restart steering |
-| Recovery | Runtime startup and workspace run controls | Reconciliation of interrupted work, interactions, limits, and effects |
-| Checkpoints and rollback | Workspace source-control and run actions | Workspace checkpoints, provider rollback, context invalidation |
-| Plans and background work | Pill messages; workspace detailed views | Shared V2 activity, plan, and execution projections |
-| Provider capabilities | Live model menu; workspace settings | Driver capabilities, native/fallback strategies, additional upstream drivers |
+| Merge-back | Runtime only; no pill control | V2 merge-back execution and checkpoint integration |
+| Scheduling | Runtime only; no pill control | Persisted interval/fixed-time schedules, weekdays, run-now, history and enable/disable |
+| Delegation and native subagents | Orchestration tools | Orchestrator MCP toolkit, child execution graphs, pending interactions |
+| Durable commands and execution | Background runtime | SQLite event store, command receipts, effect outbox, runs/attempts/nodes |
+| Queues and steering | Pill queues | Persisted run queue and native/restart steering |
+| Recovery | Runtime startup | Reconciliation of interrupted work, interactions, limits, and effects |
+| Checkpoints and rollback | Runtime only; no pill control | Workspace checkpoints, provider rollback, context invalidation |
+| Plans and background work | Pill messages | Shared V2 activity, plan, and execution projections |
+| Provider capabilities | Live model menu | Driver capabilities, native/fallback strategies, additional upstream drivers |
 
-The floating view deliberately remains compact. Advanced workflows are available in the optional workspace rather than being duplicated inside the pill. GLUI includes the desktop/server/web runtime; it does not ship T3's separately distributed mobile application or hosted relay service.
+The floating pill is the only user interface. The bundled desktop host stays hidden; advanced upstream workspace controls are not exposed in GLUI. The table distinguishes available pill controls from services retained in the background runtime. GLUI includes the desktop/server/web runtime; it does not ship T3's separately distributed mobile application or hosted relay service.
 
 ## Verification
 

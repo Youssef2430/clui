@@ -124,7 +124,7 @@ interface State {
   closeSearchPanel: () => void
   setSearchIndexStatus: (status: SearchIndexStatus) => void
   resumeSession: (sessionId: string, title?: string, projectPath?: string, provider?: ProviderId) => Promise<string>
-  addSystemMessage: (content: string) => void
+  addSystemMessage: (content: string, tabId?: string) => void
   sendMessage: (prompt: string, projectPath?: string) => void
   respondPermission: (tabId: string, questionId: string, optionId: string) => Promise<void>
   addDirectory: (dir: string) => void
@@ -348,8 +348,8 @@ export const useSessionStore = create<State>((set, get) => ({
     const messages = snapshot.messages.map(message => {
       const old = oldMessages.get(message.id)
       const next = { ...message, attachments: message.attachments ?? old?.attachments }
-      return old && Object.keys(next).every(key => key === 'attachments'
-        ? JSON.stringify(old.attachments) === JSON.stringify(next.attachments)
+      return old && Object.keys(next).every(key => key === 'attachments' || key === 'contextChange'
+        ? JSON.stringify(old[key]) === JSON.stringify(next[key])
         : old[key as keyof Message] === next[key as keyof Message]) ? old : next
     })
     set(s => ({ tabs: s.tabs.map(t => t.id === tabId ? {
@@ -810,11 +810,10 @@ export const useSessionStore = create<State>((set, get) => ({
     return tabId
   },
 
-  addSystemMessage: (content) => {
-    const { activeTabId } = get()
+  addSystemMessage: (content, tabId = get().activeTabId) => {
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === activeTabId
+        t.id === tabId
           ? {
               ...t,
               messages: [

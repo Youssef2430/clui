@@ -1,6 +1,6 @@
 # GLUI architecture
 
-GLUI keeps its floating Electron pill as the default window. The pill owns hotkeys, window positioning, local voice input, attachments, the skills directory, and desktop notifications. Its conversations use the bundled Orchestrator V2 runtime in `orchestrator/`.
+GLUI keeps its floating Electron pill as its only user interface. The pill owns hotkeys, window positioning, local voice input, attachments, the skills directory, and desktop notifications. Its conversations use the bundled Orchestrator V2 runtime in `orchestrator/`.
 
 ```text
 Floating pill → isolated preload → WorkspaceControlPlane
@@ -12,7 +12,7 @@ Floating pill → isolated preload → WorkspaceControlPlane
                            Claude Code / Codex / OpenCode
 ```
 
-The workspace process starts with the pill and initially hides its window. Opening the workspace reveals the same canonical conversation, with the full branch, worktree, merge-back, scheduling, delegation, plan, source-control, and recovery interfaces. Closing that window hides it; quitting GLUI stops the owned runtime. Schedules require GLUI to be running.
+The workspace process starts with the pill and stays hidden. The pill has no action or IPC endpoint to reveal the full desktop workspace. Quitting GLUI stops the owned runtime. Its durable conversation, handoff, branching, and recovery services power the pill.
 
 Native glass lives in a noninteractive AppKit child panel ordered behind the foreground Electron window. Putting `NSGlassEffectView` inside Chromium's compositor causes it to sample and obscure text, even when the native view is inserted below Chromium's views. Keep these rendering surfaces separate. The backing follows the parent position and visibility; only the foreground handles input. The native addon must be unpacked from ASAR when packaging.
 

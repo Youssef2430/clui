@@ -19,7 +19,7 @@ import { clearChunkReloadGuard, reloadOnceForChunkLoadError } from "./lib/chunkR
 const history = isElectron ? createHashHistory() : createBrowserHistory();
 
 const router = getRouter(history);
-installGluiPillBridge((environmentId, threadId) => router.navigate({ to: "/$environmentId/$threadId", params: { environmentId, threadId } }));
+installGluiPillBridge();
 
 if (isElectron) {
   syncDocumentElectronPlatformClasses(navigator.platform);

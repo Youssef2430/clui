@@ -1,20 +1,19 @@
 # GLUI — Glue UI
 
-Claude Code, Codex, and OpenCode in a floating macOS pill. GLUI combines streaming conversations, approvals, attachments, local voice input, and a shared skills directory with the full Orchestrator V2 workspace.
+Claude Code, Codex, and OpenCode in a floating macOS pill. GLUI combines streaming conversations, approvals, attachments, local voice input, and a shared skills directory with a persistent Orchestrator V2 runtime.
 
-The pill stays the main interface. Its slim composer shelf holds the folder, agent/model, reasoning, access level, and current Git branch. **Liquid Glass** is the default theme: native macOS glass with black (`#0A0A0A`) and white (`#FDFDFD`) tints and Burgundy, rose, cream, and ivory accents. The rounded input keeps its small settings bar attached underneath. macOS 26+ uses Liquid Glass; older macOS versions use native frosted material. Drag the top-right resize handle to adjust the panel; double-click it to reset. **Burgundy** and **Tidal** complete the three-theme collection. All three support light, dark, and system appearance.
+The floating pill is the interface. Its slim composer shelf holds the folder, agent/model, reasoning, access level, and current Git branch. **Liquid Glass** is the default theme: native macOS glass with black (`#0A0A0A`) and white (`#FDFDFD`) tints and Burgundy, rose, cream, and ivory accents. The rounded input keeps its small settings bar attached underneath. macOS 26+ uses Liquid Glass; older macOS versions use native frosted material. Drag the top-right resize handle to adjust the panel; double-click it to reset. **Burgundy** and **Tidal** complete the three-theme collection. All three support light, dark, and system appearance.
 
-## Conversations and workspace
+## Conversations
 
 - Choose Claude Code, Codex, or OpenCode beneath the input. Changing agents continues the conversation using a context handoff.
 - Branch a conversation with the branch button. The branch retains the source history.
-- Open the workspace for merge-back, worktrees, source control, scheduling, delegation, plan mode, checkpoints, and detailed run controls. It shares the pill's conversations and opens only when requested.
 - Model and reasoning options come from the agent's live catalog. Access choices include **Ask first**, **Auto**, and **Full access**, with **Allow edits** where supported. Codex and Claude use native automatic review; OpenCode Auto allows edits and asks before other actions.
 - History includes durable GLUI conversations and native CLI sessions. “Open in CLI” resumes the matching native conversation.
-- Queues, execution state, checkpoints, and schedules are persisted. Schedules run while GLUI is open, including when the pill and workspace windows are hidden.
+- Conversations, queued prompts, and execution state persist across restarts. The runtime stays connected while the pill is hidden.
 - `⌥ Space` toggles the pill (fallback `⌘⇧K`). Voice transcription stays local.
 
-The workspace bundles [T3 Code Orchestrator V2](https://github.com/pingdotgg/t3code/pull/2829) at the revision in [UPSTREAM.json](orchestrator/UPSTREAM.json), under its original MIT license. Additional upstream drivers are available in workspace provider settings. See the [feature map](docs/orchestrator-v2-audit.md).
+The background runtime bundles [T3 Code Orchestrator V2](https://github.com/pingdotgg/t3code/pull/2829) at the revision in [UPSTREAM.json](orchestrator/UPSTREAM.json), under its original MIT license. GLUI exposes Claude Code, Codex, and OpenCode through the pill. See the [feature map](docs/orchestrator-v2-audit.md).
 
 ## Skills
 
@@ -47,6 +46,7 @@ GLUI uses existing CLI authentication. Models remain subject to the connected ac
 | `npm run typecheck && npm test` | Check the pill and integration logic |
 | `npm run test:workspace` | V2, scheduling, recovery, and orchestration MCP tests |
 | `npm run smoke:electron` | Isolated desktop API smoke check |
+| `npm run smoke:pill-ui` | Pill context/activity UI checks with screenshots and video |
 | `npm run dist:local` | Build an ad-hoc signed local `GLUI.app` |
 | `npm run dist:dmg` | Build a local DMG and update ZIP |
 | `npm run dist:release` | Sign and notarize both Mac architectures, with a combined update feed |

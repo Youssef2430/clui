@@ -334,14 +334,14 @@ h1 span {
 }
 .hero-scene {
   position: relative;
-  width: min(1440px, 100%);
-  height: 515px;
+  width: 100%;
+  height: clamp(515px, 37vw, 900px);
   margin: -1px auto 0;
 }
 .scene-art {
   position: absolute;
-  inset: -10px -30px -2px;
-  background: url("/brand/glass-ribbon.svg") center 49% / 1260px 590px no-repeat;
+  inset: -10% -12% -2px;
+  background: url("/brand/glass-ribbon.svg") center / 100% 100% no-repeat;
   pointer-events: none;
   opacity: 0.95;
   mask-image: linear-gradient(transparent, #000 12%, #000 79%, transparent 99%);
@@ -1274,6 +1274,10 @@ h3 {
   }
   .hero-scene {
     margin-top: 12px;
+  }
+  .product-stage {
+    width: clamp(580px, 36vw, 760px);
+    padding-top: clamp(42px, 4vw, 110px);
   }
 }
 @media (max-width: 1000px) {

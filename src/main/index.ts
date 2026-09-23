@@ -843,7 +843,6 @@ ipcMain.on(IPC.UPDATE_SNAP_ZONE, (_, zone: 'left' | 'center' | 'right') => {
 })
 
 controlPlane.on('snapshot', (tabId, snapshot) => broadcast(IPC.THREAD_SNAPSHOT, tabId, snapshot))
-ipcMain.handle(IPC.OPEN_WORKSPACE, (_event, tabId?: string) => controlPlane.openWorkspace(tabId))
 ipcMain.handle(IPC.ATTACH_THREAD, (_event, { tabId, sessionId }) => controlPlane.attach(tabId, sessionId))
 ipcMain.handle(IPC.FORK_THREAD, (_event, tabId: string) => controlPlane.fork(tabId))
 ipcMain.handle(IPC.WORKSPACE_HISTORY, (_event, provider?: ProviderId, projectPath?: string) => controlPlane.listSessions(provider, projectPath))
@@ -2314,7 +2313,6 @@ app.whenReady().then(async () => {
     if (!tray) return
     const items: Electron.MenuItemConstructorOptions[] = [
       { label: 'Show GLUI', click: () => showWindow('tray menu') },
-      { label: 'Open workspace', click: () => { void controlPlane.openWorkspace().catch(error => log(`Workspace failed: ${String(error)}`)) } },
     ]
     if (pendingUpdateVersion) {
       items.push({

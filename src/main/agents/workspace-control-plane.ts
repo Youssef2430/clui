@@ -119,7 +119,6 @@ export class ControlPlane extends EventEmitter {
     const tab = this.requireTab(id)
     await this.host.request({ type: 'respond', threadId: tab.threadId, requestId, answers }); return true
   }
-  openWorkspace(id?: string) { const tab = id && this.tabs.get(id); return this.host.request({ type: 'show', ...(tab && tab.established ? { threadId: tab.threadId } : {}) }) }
   async fork(id: string) {
     const tab = this.requireTab(id); const snapshot = this.snapshots.get(tab.threadId)
     if (!snapshot?.lastRunId) throw new Error('Send a message before branching this conversation')

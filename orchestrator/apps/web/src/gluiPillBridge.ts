@@ -1,5 +1,6 @@
 import { CommandId, ThreadId, ProjectId, MessageId, RunId, RuntimeRequestId, OrchestrationV2Command, ProviderApprovalDecision, DEFAULT_MODEL_BY_PROVIDER, type EnvironmentId, type OrchestrationV2ThreadProjection, type ServerProvider } from "@t3tools/contracts";
-import type { PillAction, PillRequest, PillReply, PillThread, PillMessage } from "@t3tools/shared/gluiPill";
+import type { PillAction, PillRequest, PillReply, PillThread, PillMessage, PillContextAgent } from "@t3tools/shared/gluiPill";
+import { projectPillContext } from "./gluiPillContext";
 import { runAtomCommand, type AtomCommand } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentThreadState } from "@t3tools/client-runtime/state/threads";
 import * as Cause from "effect/Cause";
@@ -26,6 +27,12 @@ const driver = (provider: string) => provider === "claude" ? "claudeAgent" : pro
 const providerFor = (instanceId: string): PillThread["provider"] => {
   const kind = registry.get(primaryServerConfigAtom)?.providers.find(p => p.instanceId === instanceId)?.driver;
   return kind === "claudeAgent" ? "claude" : kind === "opencode" ? "opencode" : "codex";
+};
+const contextAgentFor = (instanceId: string, model?: string): PillContextAgent => {
+  const instance = registry.get(primaryServerConfigAtom)?.providers.find(p => p.instanceId === instanceId);
+  const provider = instance?.driver === "claudeAgent" ? "claude" : instance?.driver === "codex" ? "codex" : instance?.driver === "opencode" ? "opencode" : undefined;
+  const providerLabel = provider === "claude" ? "Claude Code" : provider === "codex" ? "Codex" : provider === "opencode" ? "OpenCode" : "Agent";
+  return { ...(provider ? { provider } : {}), label: (model && instance?.models.find(m => m.slug === model)?.name) || model || providerLabel };
 };
 
 export function projectPillThread(projection: OrchestrationV2ThreadProjection, workspaceRoot: string, hasMoreHistory: boolean): PillThread {
@@ -54,7 +61,7 @@ export function projectPillThread(projection: OrchestrationV2ThreadProjection, w
     } else if (item.type === "proposed_plan") {
       messages.push({ ...base, role: "assistant", content: item.markdown });
     } else if (item.type === "handoff" || item.type === "compaction") {
-      messages.push({ ...base, role: "system", content: item.summary ?? (item.type === "handoff" ? "Conversation handed off to another agent." : "Conversation compacted.") });
+      messages.push({ ...base, role: "system", content: item.summary ?? "", contextChange: projectPillContext(item, contextAgentFor) });
     } else if (["command_execution", "dynamic_tool", "file_change", "file_search", "web_search", "subagent"].includes(item.type)) {
       const input = "input" in item ? item.input : "fileName" in item ? item.fileName : "prompt" in item ? item.prompt : "";
       const output = "output" in item ? item.output : "result" in item ? item.result : "diffStr" in item ? item.diffStr : "results" in item ? item.results : "";
@@ -71,7 +78,7 @@ export function projectPillThread(projection: OrchestrationV2ThreadProjection, w
   };
 }
 
-export function installGluiPillBridge(navigate: (environmentId: string, threadId: string) => Promise<unknown>): () => void {
+export function installGluiPillBridge(): () => void {
   const host = window.gluiPillHost;
   if (!host) return () => {};
   const watches = new Map<string, { dispose: () => void; ready: Promise<void> }>();
@@ -94,7 +101,7 @@ export function installGluiPillBridge(navigate: (environmentId: string, threadId
   };
   const selection = (provider: string, model?: string) => {
     const instance = registry.get(primaryServerConfigAtom)?.providers.find(p => p.driver === driver(provider) && p.enabled && p.availability !== "unavailable");
-    if (!instance) throw new Error(`${provider} is not enabled. Open workspace settings to configure it.`);
+    if (!instance) throw new Error(`${provider} is unavailable. Check the agent CLI installation and sign-in, then restart GLUI.`);
     const chosen = model || instance.models.find(m => m.isDefault)?.slug || instance.models[0]?.slug || DEFAULT_MODEL_BY_PROVIDER[instance.driver];
     if (!chosen) throw new Error(`No models are available for ${provider}.`);
     return { instanceId: instance.instanceId, model: chosen };
@@ -113,7 +120,7 @@ export function installGluiPillBridge(navigate: (environmentId: string, threadId
     const timer = setTimeout(() => finish(last?.message ?? `No models were discovered for ${provider}. Check the agent setup and retry.`), 30_000);
     const check = () => {
       last = registry.get(primaryServerConfigAtom)?.providers.find(p => p.driver === driver(provider));
-      if (!last?.enabled) finish(`${provider} is not enabled in workspace settings.`);
+      if (!last?.enabled) finish(`${provider} is unavailable. Check the agent CLI installation and sign-in, then restart GLUI.`);
       else if (last.models.length) finish();
       else if (last.availability === "unavailable") finish(last.unavailableReason ?? `${provider} is unavailable.`);
     };
@@ -177,10 +184,6 @@ export function installGluiPillBridge(navigate: (environmentId: string, threadId
       const snapshot = Option.getOrNull(registry.get(environmentShell.stateValueAtom(environmentId)).snapshot);
       return snapshot?.threads.map(t => ({ sessionId: t.id, provider: providerFor(t.modelSelection.instanceId), slug: t.title, firstMessage: t.title, lastTimestamp: DateTime.formatIso(t.updatedAt), size: 0, projectPath: snapshot.projects.find(p => p.id === t.projectId)?.workspaceRoot })) ?? [];
     }
-    if (action.type === "show") {
-      if (action.threadId) await navigate(environmentId, action.threadId);
-      return true;
-    }
     if (!action.threadId) throw new Error("A thread is required.");
     const threadId = ThreadId.make(action.threadId);
     if (action.type === "unwatch") { watches.get(threadId)?.dispose(); watches.delete(threadId); return; }
@@ -194,7 +197,7 @@ export function installGluiPillBridge(navigate: (environmentId: string, threadId
       await new Promise<void>((resolve, reject) => {
         const atom = environmentShell.stateValueAtom(environmentId);
         let dispose = () => {};
-        const timer = setTimeout(() => { dispose(); reject(new Error("The branch was created but has not appeared in history yet. Reopen it from the workspace.")); }, 20_000);
+        const timer = setTimeout(() => { dispose(); reject(new Error("The branch was created but has not appeared in history yet. Reopen it from history.")); }, 20_000);
         const check = () => {
           if (Option.getOrNull(registry.get(atom).snapshot)?.threads.some(thread => thread.id === action.targetThreadId)) {
             clearTimeout(timer); dispose(); resolve();

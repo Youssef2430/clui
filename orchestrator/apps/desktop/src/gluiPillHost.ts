@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import type { PillReply, PillRequest } from "@t3tools/shared/gluiPill";
 
 export const isPillHost = process.env.GLUI_WORKSPACE_HOST === "1" && typeof process.send === "function";
@@ -12,10 +12,6 @@ export function installPillHost(): void {
   const pending: PillRequest[] = [];
   const deliver = (request: PillRequest) => {
     if (!renderer || renderer.isDestroyed()) return;
-    if (request.action.type === "show") {
-      const window = BrowserWindow.fromWebContents(renderer);
-      if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); }
-    }
     renderer.send("glui:host-request", request);
   };
   app.on("before-quit", () => { quitting = true; });

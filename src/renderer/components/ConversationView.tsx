@@ -9,13 +9,15 @@ import remarkBreaks from 'remark-breaks'
 import {
   FileText, PencilSimple, FileArrowUp, Terminal, MagnifyingGlass, Globe,
   Robot, Question, Wrench, FolderOpen, Copy, Check, CaretRight, CaretDown,
-  SpinnerGap, ArrowCounterClockwise, Square,
+  SpinnerGap, ArrowCounterClockwise,
   Brain, Lightning, ChatDots, HardDrives, Plugs, Archive, CircleDashed, Cpu,
   CurrencyDollar, Clock, ArrowsClockwise, CoinVertical,
   CheckSquare, CheckCircle, Circle,
   File, Image as ImageIcon, FileCode, FolderSimple,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
+import { ContextDivider } from './ContextDivider'
+import { RunActivity } from './RunActivity'
 import { PermissionCard } from './PermissionCard'
 import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { getFileIcon } from './FileMentionMenu'
@@ -175,7 +177,7 @@ export function ConversationView({ height = 336 }: { height?: number }) {
       <div
         ref={scrollRef}
         className="overflow-y-auto overflow-x-hidden px-4 pt-2 conversation-selectable"
-        style={{ height, maxHeight: height, paddingBottom: 28 }}
+        style={{ height, maxHeight: height, paddingBottom: 36 }}
         onScroll={handleScroll}
       >
         {/* Load older button */}
@@ -255,26 +257,17 @@ export function ConversationView({ height = 336 }: { height?: number }) {
       <div
         className="flex items-center justify-between px-4 relative"
         style={{
-          height: 28,
-          minHeight: 28,
-          marginTop: -28,
+          height: 36,
+          minHeight: 36,
+          marginTop: -36,
           background: `linear-gradient(to bottom, transparent, ${colors.containerBg} 70%)`,
           zIndex: 2,
         }}
       >
-        {/* Left: status indicator */}
+        <AnimatePresence initial={false}>
+          {isRunning && <RunActivity key={`${tab.id}:${tab.activeRequestId}`} tabId={tab.id} activity={tab.currentActivity} canInterrupt={showInterrupt} />}
+        </AnimatePresence>
         <div className="flex items-center gap-1.5 text-[11px] min-w-0">
-          {isRunning && (
-            <span className="flex items-center gap-1.5">
-              <span className="flex gap-[3px]">
-                <span className="w-[4px] h-[4px] rounded-full animate-bounce-dot" style={{ background: colors.statusRunning, animationDelay: '0ms' }} />
-                <span className="w-[4px] h-[4px] rounded-full animate-bounce-dot" style={{ background: colors.statusRunning, animationDelay: '150ms' }} />
-                <span className="w-[4px] h-[4px] rounded-full animate-bounce-dot" style={{ background: colors.statusRunning, animationDelay: '300ms' }} />
-              </span>
-              <span style={{ color: colors.textSecondary }}>{tab.currentActivity || 'Working...'}</span>
-            </span>
-          )}
-
           {isDead && (
             <span style={{ color: colors.statusError, fontSize: 11 }}>Session ended unexpectedly</span>
           )}
@@ -294,14 +287,6 @@ export function ConversationView({ height = 336 }: { height?: number }) {
           )}
         </div>
 
-        {/* Right: interrupt button when running */}
-        <div className="flex items-center flex-shrink-0">
-          <AnimatePresence>
-            {showInterrupt && (
-              <InterruptButton tabId={tab.id} />
-            )}
-          </AnimatePresence>
-        </div>
       </div>
     </div>
   )
@@ -393,38 +378,6 @@ function CopyButtonWrapper({ messageId, children }: { messageId: string; childre
     }`}>
       {children}
     </div>
-  )
-}
-
-// ─── Interrupt Button ───
-
-function InterruptButton({ tabId }: { tabId: string }) {
-  const colors = useColors()
-
-  const handleStop = () => {
-    window.glui.stopTab(tabId)
-  }
-
-  return (
-    <motion.button
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.12 }}
-      onClick={handleStop}
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] cursor-pointer flex-shrink-0 transition-colors"
-      style={{
-        background: 'transparent',
-        color: colors.statusError,
-        border: 'none',
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = colors.statusErrorBg }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-      title="Stop current task"
-    >
-      <Square size={9} weight="fill" />
-      <span>Interrupt</span>
-    </motion.button>
   )
 }
 
@@ -1236,6 +1189,8 @@ const LOCAL_COMMAND_PREFIX = '__LOCAL_COMMAND_DATA__'
 function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
   const colors = useColors()
 
+  if (message.contextChange) return <ContextDivider change={message.contextChange} />
+
   // Local command replay card
   const isLocalCommand = message.content.startsWith(LOCAL_COMMAND_PREFIX)
   if (isLocalCommand) {
@@ -1256,13 +1211,7 @@ function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?:
   if (isCompaction) {
     try {
       const parsed = JSON.parse(message.content.slice(COMPACTION_PREFIX.length))
-      const inner = <CompactionCard data={parsed} colors={colors} />
-      if (skipMotion) return <div className="py-1">{inner}</div>
-      return (
-        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="py-1">
-          {inner}
-        </motion.div>
-      )
+      return <ContextDivider change={{ kind: 'compaction', state: parsed.state || 'completed', summary: parsed.summary || parsed.message }} />
     } catch {}
   }
 
@@ -1433,91 +1382,6 @@ function LocalCommandCard({
           style={{ color: colors.textTertiary }}
         >
           {data.output}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CompactionCard({
-  data,
-  colors,
-}: {
-  data: {
-    state?: 'running' | 'completed' | 'failed'
-    message?: string
-    summary?: string
-    trigger?: string
-    compactedMessages?: number
-  }
-  colors: ReturnType<typeof useColors>
-}) {
-  const state = data.state || 'completed'
-  const isRunning = state === 'running'
-  const isFailed = state === 'failed'
-
-  const title = isRunning
-    ? 'Compacting conversation'
-    : isFailed
-      ? 'Compaction interrupted'
-      : 'Conversation compacted'
-
-  const detail = data.summary || data.message || title
-  const triggerLabel = data.trigger
-    ? (data.trigger === 'auto' ? 'automatic' : data.trigger)
-    : null
-  const compactedMessagesLabel = typeof data.compactedMessages === 'number'
-    ? `${data.compactedMessages} message${data.compactedMessages === 1 ? '' : 's'}`
-    : null
-
-  const icon = isRunning
-    ? <SpinnerGap size={12} className="animate-spin" style={{ color: colors.statusRunning }} />
-    : isFailed
-      ? <Archive size={12} style={{ color: colors.statusError }} />
-      : <Archive size={12} weight="fill" style={{ color: colors.accent }} />
-
-  return (
-    <div
-      className="inline-flex flex-col gap-1 px-3 py-2 rounded-xl max-w-full"
-      style={{
-        background: isFailed ? colors.statusErrorBg : colors.surfaceHover,
-        border: `1px solid ${isFailed ? colors.statusErrorBg : colors.toolBorder}`,
-      }}
-    >
-      <div className="flex items-center gap-2">
-        {icon}
-        <span
-          className="text-[11px] font-medium"
-          style={{ color: isFailed ? colors.statusError : colors.textSecondary }}
-        >
-          {title}
-        </span>
-      </div>
-      <div
-        className="text-[11px] leading-[1.5] whitespace-pre-wrap"
-        style={{ color: isFailed ? colors.statusError : colors.textTertiary }}
-      >
-        {detail}
-      </div>
-      {(triggerLabel || compactedMessagesLabel) && (
-        <div className="flex items-center gap-2 text-[10px]" style={{ color: colors.textMuted }}>
-          {triggerLabel && (
-            <span
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5"
-              style={{
-                background: isFailed ? colors.statusErrorBg : colors.surfaceSecondary,
-                color: isFailed ? colors.statusError : colors.textSecondary,
-              }}
-              title={`Trigger: ${triggerLabel}`}
-              aria-label={`Trigger: ${triggerLabel}`}
-            >
-              <Lightning size={10} weight="fill" />
-              <span>{triggerLabel}</span>
-            </span>
-          )}
-          {compactedMessagesLabel && (
-            <span>{compactedMessagesLabel}</span>
-          )}
         </div>
       )}
     </div>

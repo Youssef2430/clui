@@ -460,3 +460,39 @@ button:focus-visible { outline: 2px solid var(--glui-accent); outline-offset: 2p
   .composer-shelf { margin-left: 6px; margin-right: 6px; }
   .composer-control-effort .truncate, .composer-control-access .truncate { max-width: 45px; }
 }
+/* A quiet, continuous waveform keeps task activity legible at pill scale. */
+.run-activity { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; font-size: 11px; }
+.run-activity-status { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.run-activity-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-wave { display: flex; align-items: center; justify-content: center; gap: 2px; width: 20px; height: 16px; flex-shrink: 0; }
+.run-wave > span { width: 2px; height: 12px; border-radius: 2px; background: currentColor; transform-origin: center; animation: run-wave 1.4s ease-in-out infinite; }
+.run-wave.is-stopping > span { animation: none; transform: scaleY(.25); opacity: .5; transition: transform .3s ease, opacity .3s ease; }
+@keyframes run-wave { 0%, 100% { transform: scaleY(.3); opacity: .45; } 45% { transform: scaleY(1); opacity: 1; } }
+.run-interrupt { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 76px; padding: 4px 9px; border: 1px solid; border-radius: 999px; font-size: 10px; line-height: 14px; flex-shrink: 0; cursor: pointer; }
+.run-interrupt:disabled { cursor: default; }
+.run-interrupt:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.run-stop-spinner { width: 10px; height: 10px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: run-stop-spin .8s linear infinite; }
+@keyframes run-stop-spin { to { transform: rotate(360deg); } }
+.context-divider { margin: 14px 0; font-size: 10px; line-height: 1.5; }
+.context-divider summary { list-style: none; cursor: pointer; border-radius: 4px; }
+.context-divider summary::-webkit-details-marker { display: none; }
+.context-divider summary:focus-visible { outline: 2px solid var(--glui-accent); outline-offset: 4px; }
+.context-divider-row { display: flex; align-items: center; gap: 10px; width: 100%; }
+.context-rule { height: 1px; min-width: 12px; flex: 1; opacity: .8; }
+.context-divider-content { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 5px 7px; min-width: 0; max-width: calc(100% - 44px); }
+.context-event-label, .context-agent, .context-agents { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.context-agents { justify-content: center; flex-wrap: wrap; }
+.context-agent > span { overflow-wrap: anywhere; }
+.context-agent svg, .context-event-label svg, .context-agents > svg { flex-shrink: 0; }
+.context-event-label { white-space: nowrap; }
+.context-token-count { font-variant-numeric: tabular-nums; }
+.context-detail-chevron { opacity: .6; transition: transform .2s ease; }
+.context-divider[open] .context-detail-chevron { transform: rotate(180deg); }
+.context-summary { margin: 10px 22px 0; padding: 2px 12px; border-left: 1px solid; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.6; max-height: 180px; overflow-y: auto; }
+.context-progress { animation: context-pulse 1.8s ease-in-out infinite; }
+@keyframes context-pulse { 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) {
+  .run-wave > span, .run-stop-spinner, .context-progress { animation: none !important; }
+  .run-wave > span:nth-child(odd) { transform: scaleY(.5); }
+  .run-wave.is-stopping > span { transform: scaleY(.25); }
+}
