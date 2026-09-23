@@ -184,7 +184,7 @@ async function ensurePipeline(): Promise<void> {
 
   // Redirect model cache to a real filesystem path outside app.asar.
   // The library will download the model on first use (~90 MB).
-  env.cacheDir = join(homedir(), '.clui', 'models')
+  env.cacheDir = join(homedir(), '.glui', 'models')
 
   // Track loaded/total bytes per file to compute true aggregate progress.
   // Per-file `progress` percentage is misleading because small files hit 100%
@@ -192,7 +192,7 @@ async function ensurePipeline(): Promise<void> {
   const fileProgress: Record<string, { loaded: number; total: number }> = {}
   let lastReported = -1
   pipeline = await createPipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
-    quantized: true,
+    dtype: 'q8',
     progress_callback: (info: any) => {
       if (info.status === 'progress' && info.file) {
         fileProgress[info.file] = { loaded: info.loaded ?? 0, total: info.total ?? 0 }
@@ -259,7 +259,7 @@ async function buildIndex(): Promise<void> {
   try {
     const projectDirs = readdirSync(PROJECTS_ROOT).filter((d: string) => {
       try {
-        if (d.includes('clui-btw-')) return false
+        if (d.includes('glui-btw-')) return false
         return statSync(join(PROJECTS_ROOT, d)).isDirectory()
       } catch { return false }
     })

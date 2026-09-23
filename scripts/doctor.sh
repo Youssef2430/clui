@@ -1,7 +1,7 @@
 #!/bin/bash
-# Clui environment doctor — read-only diagnostics, no installs.
+# GLUI environment doctor — read-only diagnostics, no installs.
 
-echo "Clui Environment Check"
+echo "GLUI Environment Check"
 echo "========================="
 echo
 
@@ -34,16 +34,16 @@ if [ "$(uname)" = "Darwin" ]; then
     check "macOS" "0" "$ver — requires 13+"
   fi
 else
-  check "macOS" "0" "not macOS ($(uname)) — Clui requires macOS"
+  check "macOS" "0" "not macOS ($(uname)) — GLUI requires macOS"
 fi
 
 # Node
 if command -v node &>/dev/null; then
   node_ver=$(node --version | sed 's/^v//')
-  if version_gte "$node_ver" "18.0.0"; then
+  if version_gte "$node_ver" "22.0.0"; then
     check "Node.js" "1" "v$node_ver"
   else
-    check "Node.js" "0" "v$node_ver — requires 18+ — brew install node"
+    check "Node.js" "0" "v$node_ver — requires 22+ — brew install node"
   fi
 else
   check "Node.js" "0" "not found — brew install node"
@@ -112,12 +112,18 @@ else
   check "C++ headers" "0" "skipped (no clang++)"
 fi
 
-# Claude CLI
-if command -v claude &>/dev/null; then
-  cver=$(claude --version 2>/dev/null || echo "unknown")
-  check "Claude CLI" "1" "$cver"
-else
-  check "Claude CLI" "0" "not found — npm install -g @anthropic-ai/claude-code"
+# At least one agent is required; each provider uses its own native login.
+agents_found=0
+for agent in claude codex opencode; do
+  if command -v "$agent" &>/dev/null; then
+    check "$agent" "1" "$("$agent" --version 2>/dev/null)"
+    agents_found=$((agents_found + 1))
+  else
+    printf "  INFO  %s — optional CLI not installed\n" "$agent"
+  fi
+done
+if [ "$agents_found" -eq 0 ]; then
+  check "Agent CLI" "0" "Install Claude Code, Codex, or OpenCode"
 fi
 
 echo

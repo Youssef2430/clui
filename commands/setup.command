@@ -30,13 +30,13 @@ step "Checking environment"
 
 # macOS
 if [ "$(uname)" != "Darwin" ]; then
-  fail "Clui requires macOS 13+. Detected: $(uname). This project does not run on Linux or Windows."
+  fail "GLUI requires macOS 13+. Detected: $(uname). This project does not run on Linux or Windows."
 else
   macos_ver=$(sw_vers -productVersion 2>/dev/null || echo "0")
   if version_gte "$macos_ver" "13.0"; then
     pass "macOS $macos_ver"
   else
-    fail "macOS $macos_ver is too old. Clui requires macOS 13+."
+    fail "macOS $macos_ver is too old. GLUI requires macOS 13+."
     echo "  Update macOS in System Settings > General > Software Update."
   fi
 fi
@@ -44,10 +44,10 @@ fi
 # Node
 if command -v node &>/dev/null; then
   node_ver=$(node --version | sed 's/^v//')
-  if version_gte "$node_ver" "18.0.0"; then
+  if version_gte "$node_ver" "24.13.1"; then
     pass "Node.js v$node_ver"
   else
-    fail "Node.js v$node_ver is too old. Clui requires Node 18+."
+    fail "Node.js v$node_ver is too old. GLUI requires Node 24.13.1+."
     fix "brew install node"
   fi
 else
@@ -126,12 +126,12 @@ else
   fix "xcode-select --install"
 fi
 
-# Claude CLI
-if command -v claude &>/dev/null; then
-  pass "Claude Code CLI found"
+# An installed agent is enough to use GLUI.
+if command -v claude &>/dev/null || command -v codex &>/dev/null || command -v opencode &>/dev/null; then
+  pass "Coding agent CLI found"
 else
-  fail "Claude Code CLI is not installed."
-  fix "npm install -g @anthropic-ai/claude-code"
+  fail "Install Claude Code, Codex, or OpenCode first."
+  fix "npm install -g @openai/codex"
 fi
 
 # Bail if any check failed
@@ -180,12 +180,12 @@ if [ -z "$installed_builder" ] || [ -z "$installed_electron" ]; then
   exit 1
 fi
 
-if ! version_gte "$installed_builder" "26.8.1" || ! version_gte "$installed_electron" "35.7.5"; then
+if ! version_gte "$installed_builder" "26.8.1" || ! version_gte "$installed_electron" "44.4.2"; then
   echo
   echo "Detected outdated install (electron-builder $installed_builder, electron $installed_electron)."
   echo "Applying required security baseline..."
   echo
-  npm install -D electron-builder@^26.8.1 electron@^35.7.5
+  npm install -D electron-builder@^26.8.1 electron@44.4.2
 fi
 
 final_builder=$(node -p "require('./node_modules/electron-builder/package.json').version" 2>/dev/null || echo "")
@@ -193,6 +193,8 @@ final_electron=$(node -p "require('./node_modules/electron/package.json').versio
 echo "Installed: electron-builder $final_builder, electron $final_electron"
 
 echo
+npm run setup
+
 echo "Setup complete. To launch the app, run:"
 echo
 echo "  ./commands/start.command"

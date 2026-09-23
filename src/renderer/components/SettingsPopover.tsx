@@ -1,11 +1,13 @@
+import { PROVIDERS } from '../../shared/providers'
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, ArrowsOutSimple, Moon, ArrowsClockwise } from '@phosphor-icons/react'
-import { useThemeStore } from '../theme'
+import { DotsThree, Bell, ArrowsOutSimple, Moon, ArrowsClockwise, Check } from '@phosphor-icons/react'
+import { useThemeStore, BRAND_PALETTES, type BrandPalette } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
+import { usePanelSize } from '../panel-size'
 
 function RowToggle({
   checked,
@@ -34,7 +36,7 @@ function RowToggle({
         className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-all"
         style={{
           left: checked ? 18 : 2,
-          background: '#fff',
+          background: checked ? colors.containerBg : '#fff',
         }}
       />
     </button>
@@ -44,6 +46,10 @@ function RowToggle({
 /* ─── Settings popover ─── */
 
 export function SettingsPopover() {
+  const brandPalette = useThemeStore(s => s.brandPalette)
+  const setBrandPalette = useThemeStore(s => s.setBrandPalette)
+  const providers = useSessionStore(s => s.providers)
+  const refreshProviders = useSessionStore(s => s.refreshProviders)
   const soundEnabled = useThemeStore((s) => s.soundEnabled)
   const setSoundEnabled = useThemeStore((s) => s.setSoundEnabled)
   const themeMode = useThemeStore((s) => s.themeMode)
@@ -52,7 +58,7 @@ export function SettingsPopover() {
   const setExpandedUI = useThemeStore((s) => s.setExpandedUI)
   const updateReady = useThemeStore((s) => s.updateReady)
   const updateVersion = useThemeStore((s) => s.updateVersion)
-  const isExpanded = useSessionStore((s) => s.isExpanded)
+  const isExpanded = useSessionStore((s) => s.isExpanded && !s.marketplaceOpen && !s.searchPanelOpen)
   const popoverLayer = usePopoverLayer()
   const colors = useColors()
   const [checking, setChecking] = useState(false)
@@ -67,7 +73,7 @@ export function SettingsPopover() {
     const rect = triggerRef.current.getBoundingClientRect()
     const gap = 6 // Match HistoryPicker spacing exactly.
     const margin = 8
-    const right = window.innerWidth - rect.right
+    const right = Math.max(margin, Math.min(window.innerWidth - rect.right, window.innerWidth - 280 - margin))
 
     if (isExpanded) {
       // Keep anchored below trigger (so it never covers the dots button),
@@ -76,7 +82,7 @@ export function SettingsPopover() {
       setPos({
         top,
         right,
-        maxHeight: Math.max(120, window.innerHeight - top - margin),
+        maxHeight: Math.max(0, window.innerHeight - top - margin),
       })
       return
     }
@@ -85,7 +91,7 @@ export function SettingsPopover() {
     setPos({
       bottom: window.innerHeight - rect.top + gap,
       right,
-      maxHeight: undefined,
+      maxHeight: Math.max(0, rect.top - gap - margin),
     })
   }, [isExpanded])
 
@@ -143,18 +149,19 @@ export function SettingsPopover() {
       {popoverLayer && open && createPortal(
         <motion.div
           ref={popoverRef}
-          data-clui-ui
+          data-glui-ui
           initial={{ opacity: 0, y: isExpanded ? -4 : 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: isExpanded ? -4 : 4 }}
           transition={{ duration: 0.12 }}
-          className="rounded-xl"
+          className="glui-popover rounded-xl"
           style={{
             position: 'fixed',
             ...(pos.top != null ? { top: pos.top } : {}),
             ...(pos.bottom != null ? { bottom: pos.bottom } : {}),
             right: pos.right,
             width: 280,
+            maxWidth: 'calc(100vw - 16px)',
             pointerEvents: 'auto',
             background: colors.popoverBg,
             backdropFilter: 'blur(20px)',
@@ -165,6 +172,29 @@ export function SettingsPopover() {
           }}
         >
           <div className="p-3 flex flex-col gap-2.5">
+            <div style={{ color: colors.textPrimary, fontSize: 12, fontWeight: 600 }}>GLUI <span style={{ color: colors.textTertiary, fontWeight: 400 }}> / Glue UI</span></div>
+            <div className="theme-options" role="group" aria-label="Theme">
+              {Object.entries(BRAND_PALETTES).map(([id, p]) => (
+                <button key={id} className="theme-option" aria-label={`${p.name}${id === 'glass' ? ' (default)' : ''}`} aria-pressed={brandPalette === id} onClick={() => setBrandPalette(id as BrandPalette)}>
+                  <span className={`theme-preview theme-preview-${id}`} style={{ backgroundColor: p.cream }} aria-hidden="true">
+                    <span className="theme-preview-orb" style={{ background: p.rose }} />
+                    <span className="theme-preview-pill" style={{ background: p.ivory }}><span style={{ background: p.accent }} /></span>
+                    {brandPalette === id && <span className="theme-selected"><Check size={9} weight="bold" /></span>}
+                  </span>
+                  <span className="theme-name">{p.name}</span>
+                  <span className="theme-description">{id === 'glass' ? 'Default' : id === 'burgundy' ? 'Warm & rich' : 'Quiet & green'}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center justify-between" style={{ color: colors.textPrimary, fontSize: 12 }}>
+              <span>Appearance</span>
+              <div className="appearance-options" role="group" aria-label="Appearance">
+                {(['light', 'dark', 'system'] as const).map(mode => <button key={mode} aria-pressed={themeMode === mode} aria-label={`${mode[0].toUpperCase()}${mode.slice(1)} appearance`} onClick={() => setThemeMode(mode)}>{mode[0].toUpperCase()}{mode.slice(1)}</button>)}
+              </div>
+            </div>
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+            <div className="flex justify-between" style={{ fontSize: 12, color: colors.textPrimary }}>Agents <button onClick={() => void refreshProviders()} style={{ color: colors.accent }}>Refresh</button></div>
+            {providers.map(p => <div key={p.id} style={{ fontSize: 11, color: colors.textSecondary }}><span title={PROVIDERS[p.id].login}>{PROVIDERS[p.id].name}</span> <span style={{ float: 'right', color: p.installed ? colors.statusComplete : colors.statusError }}>{p.installed ? p.version : 'Not installed'}</span>{!p.installed && <code style={{ display: 'block', userSelect: 'text', fontSize: 10, marginTop: 4 }}>{PROVIDERS[p.id].install}</code>}</div>)}
             {/* Full width */}
             <div>
               <div className="flex items-center justify-between gap-3">
@@ -178,6 +208,7 @@ export function SettingsPopover() {
                   checked={expandedUI}
                   onChange={(next) => {
                     setExpandedUI(next)
+                    usePanelSize.getState().setSize(null)
                   }}
                   colors={colors}
                   label="Toggle full width panel"
@@ -207,26 +238,6 @@ export function SettingsPopover() {
 
             <div style={{ height: 1, background: colors.popoverBorder }} />
 
-            {/* Theme */}
-            <div>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Moon size={14} style={{ color: colors.textTertiary }} />
-                  <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
-                    Dark theme
-                  </div>
-                </div>
-                <RowToggle
-                  checked={themeMode === 'dark'}
-                  onChange={(next) => setThemeMode(next ? 'dark' : 'light')}
-                  colors={colors}
-                  label="Toggle dark theme"
-                />
-              </div>
-            </div>
-
-            <div style={{ height: 1, background: colors.popoverBorder }} />
-
             {/* Check for updates */}
             <div>
               <button
@@ -234,12 +245,12 @@ export function SettingsPopover() {
                 disabled={!!updateVersion && !updateReady}
                 onClick={async () => {
                   if (updateReady) {
-                    window.clui.installUpdate()
+                    window.glui.installUpdate()
                     return
                   }
                   setChecking(true)
                   try {
-                    await window.clui.checkForUpdate()
+                    await window.glui.checkForUpdate()
                   } catch {}
                   setTimeout(() => setChecking(false), 3000)
                 }}

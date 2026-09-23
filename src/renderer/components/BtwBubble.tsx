@@ -16,7 +16,7 @@ const SAFE_LINK_COMPONENTS = {
     <button
       type="button"
       className="underline decoration-dotted underline-offset-2 cursor-pointer"
-      onClick={() => { if (href) window.clui.openExternal(String(href)) }}
+      onClick={() => { if (href) window.glui.openExternal(String(href)) }}
     >
       {children}
     </button>
@@ -156,7 +156,7 @@ export function BtwBubble() {
     <AnimatePresence>
       {btwState && (
         <motion.div
-          data-clui-ui
+          data-glui-ui
           initial={{ opacity: 0, y: 8, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 6, scale: 0.97 }}

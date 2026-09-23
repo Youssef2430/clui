@@ -1,6 +1,5 @@
 /**
- * Clui Design Tokens — Dual theme (dark + light)
- * Colors derived from ChatCN oklch system and design-fixed.html reference.
+ * GLUI materials and color tokens. Three themes, each with light/dark appearances.
  */
 import { create } from 'zustand'
 import type { PreferredTerminalId, TerminalId } from '../shared/types'
@@ -8,6 +7,9 @@ import type { PreferredTerminalId, TerminalId } from '../shared/types'
 // ─── Color palettes ───
 
 const darkColors = {
+  materialSheen: 'none',
+  materialRim: 'none',
+  materialOpaque: '#0A0A0A',
   // Container (glass surfaces)
   containerBg: '#242422',
   containerBgCollapsed: '#21211e',
@@ -142,6 +144,9 @@ const darkColors = {
 } as const
 
 const lightColors = {
+  materialSheen: 'none',
+  materialRim: 'none',
+  materialOpaque: '#FDFDFD',
   // Container (glass surfaces)
   containerBg: '#f9f8f5',
   containerBgCollapsed: '#f4f2ed',
@@ -277,6 +282,83 @@ const lightColors = {
 
 export type ColorPalette = { [K in keyof typeof darkColors]: string }
 
+export const BRAND_PALETTES = {
+  glass: { name: 'Liquid Glass', accent: '#800020', rose: '#D45060', cream: '#F3E6D5', ivory: '#FFF9F2', dark: '#0A0A0A', surface: '#29171D', line: '#603C48', muted: '#CAAEB6' },
+  burgundy: { name: 'Burgundy', accent: '#800020', rose: '#D45060', cream: '#F3E6D5', ivory: '#FFF9F2', dark: '#29171D', surface: '#39222B', line: '#603C48', muted: '#CAAEB6' },
+  tidal: { name: 'Tidal', accent: '#215E4B', rose: '#A9EDC7', cream: '#E3EBDF', ivory: '#F1F5EC', dark: '#102925', surface: '#1B3933', line: '#30544A', muted: '#A7BCB1' },
+} as const
+export type BrandPalette = keyof typeof BRAND_PALETTES
+function paletteColors(isDark: boolean, brand: BrandPalette): ColorPalette {
+  if (brand === 'glass') return glassColors(isDark)
+  const p = BRAND_PALETTES[brand]
+  const accent = isDark ? (brand === 'burgundy' ? '#F39EAD' : p.rose) : p.accent
+  const surface = isDark ? p.surface : p.cream
+  const bg = isDark ? p.dark : p.ivory
+  const border = isDark ? p.line : p.accent + '28'
+  const text = isDark ? p.ivory : p.dark
+  return { ...(isDark ? darkColors : lightColors),
+    containerBg: bg, containerBgCollapsed: bg, containerBorder: border,
+    surfacePrimary: surface, surfaceSecondary: isDark ? p.line : p.cream,
+    surfaceHover: accent + '0C', surfaceActive: accent + '16',
+    inputPillBg: bg, inputBorder: border, inputFocusBorder: accent + '88',
+    textPrimary: text, textSecondary: isDark ? p.cream : '#624D50', textTertiary: isDark ? p.muted : '#796166', textMuted: isDark ? p.muted : '#796166',
+    accent, accentLight: accent + '12', accentSoft: accent + '1F', accentBorder: accent + '30', accentBorderMedium: accent + '50',
+    statusRunning: accent, statusRunningBg: accent + '12', statusPermission: accent, statusPermissionGlow: accent + '66',
+    tabActive: surface, tabActiveBorder: border, tabHover: accent + '0C',
+    userBubble: surface, userBubbleBorder: border, userBubbleText: text,
+    toolBg: surface, toolBorder: border, toolRunningBorder: accent + '50', toolRunningBg: accent + '0C',
+    timelineLine: border, timelineNode: accent + '40', timelineNodeActive: accent,
+    sendBg: accent, sendHover: isDark ? p.ivory : p.accent, sendDisabled: accent + '45', textOnAccent: isDark ? p.dark : p.ivory,
+    popoverBg: bg, popoverBorder: border, codeBg: isDark ? '#1D1116' : '#F7EDDF',
+    micBg: surface, micColor: text, micDisabled: border, placeholder: isDark ? p.muted : '#866D70',
+    btnDisabled: border, btnHoverColor: text, btnHoverBg: surface,
+  }
+}
+
+// Black/white bases back the fallback; native glass uses the same neutral tints.
+// Retain the glass ID so preferences from the preview continue to work.
+function glassColors(dark: boolean): ColorPalette {
+  const accent = dark ? '#F39EAD' : '#800020'
+  const text = dark ? '#F8FAFC' : '#17191E'
+  const secondary = dark ? '#E0E3E9' : '#3E424B'
+  const tertiary = dark ? '#C0C6D0' : '#555B65'
+  const bg = dark ? 'rgba(12, 15, 22, .54)' : 'rgba(255, 255, 255, .48)'
+  const border = dark ? 'rgba(255, 255, 255, .20)' : 'rgba(255, 255, 255, .65)'
+  const line = dark ? 'rgba(255, 255, 255, .13)' : 'rgba(0, 0, 0, .11)'
+  const surface = dark ? 'rgba(255, 255, 255, .085)' : 'rgba(255, 255, 255, .42)'
+  const hover = dark ? 'rgba(243, 158, 173, .10)' : 'rgba(128, 0, 32, .065)'
+  const shadow = dark
+    ? '0 12px 32px rgba(0,0,0,.20), 0 2px 6px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(255,255,255,.06)'
+    : '0 12px 32px rgba(20,30,50,.10), 0 2px 6px rgba(20,30,50,.06), inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.45)'
+  return { ...(dark ? darkColors : lightColors),
+    materialSheen: dark
+      ? 'linear-gradient(165deg, rgba(255,255,255,.10), transparent 35%, transparent 65%, rgba(255,255,255,.035))'
+      : 'linear-gradient(165deg, rgba(255,255,255,.55), transparent 38%, transparent 65%, rgba(255,255,255,.18))',
+    materialRim: dark
+      ? 'linear-gradient(135deg, rgba(255,255,255,.45), rgba(255,255,255,.04) 35%, rgba(255,255,255,.04) 65%, rgba(255,255,255,.22))'
+      : 'linear-gradient(135deg, #fff, rgba(255,255,255,.18) 38%, rgba(255,255,255,.18) 64%, rgba(255,255,255,.85))',
+    containerBg: bg, containerBgCollapsed: bg, containerBorder: border,
+    containerShadow: shadow, cardShadow: shadow, cardShadowCollapsed: shadow,
+    surfacePrimary: surface, surfaceSecondary: dark ? 'rgba(255,255,255,.16)' : 'rgba(28,35,48,.10)', surfaceHover: hover, surfaceActive: hover,
+    inputPillBg: bg, inputBorder: line, inputFocusBorder: accent + '66',
+    textPrimary: text, textSecondary: secondary, textTertiary: tertiary, textMuted: tertiary,
+    accent, accentLight: accent + '10', accentSoft: accent + '1C', accentBorder: accent + '30', accentBorderMedium: accent + '50',
+    statusRunning: accent, statusRunningBg: accent + '12', statusPermission: accent, statusPermissionGlow: accent + '44',
+    tabActive: surface, tabActiveBorder: line, tabHover: hover,
+    userBubble: surface, userBubbleBorder: line, userBubbleText: text,
+    toolBg: surface, toolBorder: line, toolRunningBorder: accent + '40', toolRunningBg: accent + '08',
+    timelineLine: line, timelineNode: accent + '40', timelineNodeActive: accent,
+    sendBg: dark ? '#D45060' : '#800020', sendHover: dark ? '#E76A7B' : '#9D183A', sendDisabled: accent + '45', textOnAccent: '#FFF9F2',
+    // Menus overlap foreground text in the transparent Electron compositor;
+    // use a denser material here so that text cannot ghost through the options.
+    popoverBg: dark ? 'rgba(16, 19, 26, .96)' : 'rgba(250, 252, 255, .96)', popoverBorder: border, popoverShadow: shadow,
+    codeBg: dark ? 'rgba(0,0,0,.22)' : 'rgba(255,255,255,.36)',
+    micBg: surface, micColor: secondary, micDisabled: tertiary, placeholder: tertiary,
+    btnDisabled: tertiary, btnHoverColor: accent, btnHoverBg: dark ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.64)',
+    scrollThumb: dark ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.22)',
+  }
+}
+
 // ─── Theme store ───
 
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -286,6 +368,8 @@ function isTerminalId(value: unknown): value is TerminalId {
 }
 
 interface ThemeState {
+  brandPalette: BrandPalette
+  setBrandPalette: (brand: BrandPalette) => void
   isDark: boolean
   themeMode: ThemeMode
   soundEnabled: boolean
@@ -307,7 +391,7 @@ interface ThemeState {
   setUpdateReady: (version: string) => void
 }
 
-/** Convert camelCase token name to --clui-kebab-case CSS custom property */
+/** Convert camelCase token name to --glui-kebab-case CSS custom property */
 function camelToKebab(s: string): string {
   return s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)
 }
@@ -316,17 +400,25 @@ function camelToKebab(s: string): string {
 function syncTokensToCss(tokens: ColorPalette): void {
   const style = document.documentElement.style
   for (const [key, value] of Object.entries(tokens)) {
-    style.setProperty(`--clui-${camelToKebab(key)}`, value)
+    style.setProperty(`--glui-${camelToKebab(key)}`, value)
   }
 }
 
 function applyTheme(isDark: boolean): void {
+  document.documentElement.dataset.palette = useThemeStore.getState().brandPalette
+  document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'
   document.documentElement.classList.toggle('dark', isDark)
   document.documentElement.classList.toggle('light', !isDark)
-  syncTokensToCss(isDark ? darkColors : lightColors)
+  syncTokensToCss(paletteColors(isDark, useThemeStore.getState().brandPalette))
 }
 
-const SETTINGS_KEY = 'clui-settings'
+const SETTINGS_KEY = 'glui-settings'
+// Introduce the requested new default once. Retain the previous glui-brand key
+// for rollback; subsequent choices persist under glui-theme.
+function loadBrand(): BrandPalette {
+  try { const v = localStorage.getItem('glui-theme'); if (v && Object.hasOwn(BRAND_PALETTES, v)) return v as BrandPalette } catch {}
+  return 'glass'
+}
 
 function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; preferredTerminalId: PreferredTerminalId } {
   try {
@@ -334,7 +426,7 @@ function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expanded
     if (raw) {
       const parsed = JSON.parse(raw)
       return {
-        themeMode: ['light', 'dark'].includes(parsed.themeMode) ? parsed.themeMode : 'dark',
+        themeMode: ['system', 'light', 'dark'].includes(parsed.themeMode) ? parsed.themeMode : 'system',
         soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : true,
         expandedUI: typeof parsed.expandedUI === 'boolean' ? parsed.expandedUI : false,
         preferredTerminalId: parsed.preferredTerminalId === 'auto' || isTerminalId(parsed.preferredTerminalId)
@@ -343,7 +435,7 @@ function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expanded
       }
     }
   } catch {}
-  return { themeMode: 'dark', soundEnabled: true, expandedUI: false, preferredTerminalId: 'auto' }
+  return { themeMode: 'system', soundEnabled: true, expandedUI: false, preferredTerminalId: 'auto' }
 }
 
 function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; preferredTerminalId: PreferredTerminalId }): void {
@@ -351,14 +443,18 @@ function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expanded
 }
 
 const saved = loadSettings()
+const systemIsDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+const initialIsDark = saved.themeMode === 'system' ? systemIsDark : saved.themeMode === 'dark'
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  isDark: saved.themeMode === 'dark' ? true : saved.themeMode === 'light' ? false : true,
+  brandPalette: loadBrand(),
+  setBrandPalette: (brandPalette) => { set({ brandPalette }); try { localStorage.setItem('glui-theme', brandPalette) } catch {}; applyTheme(get().isDark) },
+  isDark: initialIsDark,
   themeMode: saved.themeMode,
   soundEnabled: saved.soundEnabled,
   expandedUI: saved.expandedUI,
   preferredTerminalId: saved.preferredTerminalId,
-  _systemIsDark: true,
+  _systemIsDark: systemIsDark,
   setIsDark: (isDark) => {
     set({ isDark })
     applyTheme(isDark)
@@ -396,17 +492,18 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 }))
 
 // Initialize CSS vars with saved theme
-syncTokensToCss(saved.themeMode === 'light' ? lightColors : darkColors)
+applyTheme(initialIsDark)
 
 /** Reactive hook — returns the active color palette */
 export function useColors(): ColorPalette {
   const isDark = useThemeStore((s) => s.isDark)
-  return isDark ? darkColors : lightColors
+  const brand = useThemeStore((s) => s.brandPalette)
+  return paletteColors(isDark, brand)
 }
 
 /** Non-reactive getter — use outside React components */
 export function getColors(isDark: boolean): ColorPalette {
-  return isDark ? darkColors : lightColors
+  return paletteColors(isDark, useThemeStore.getState().brandPalette)
 }
 
 // ─── Backward compatibility ───

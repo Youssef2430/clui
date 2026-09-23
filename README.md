@@ -1,111 +1,61 @@
-# Clui - The better UI for Claude Code
+# GLUI — Glue UI
 
-> [!NOTE] 
-> This is a forked project from [Lucas Couto](https://github.com/lcoutodemos)'s [Clui CC](https://github.com/lcoutodemos/clui-cc) with some of my additions!
+Claude Code, Codex, and OpenCode in a floating macOS pill. GLUI combines streaming conversations, approvals, attachments, local voice input, and a shared skills directory with the full Orchestrator V2 workspace.
 
-It's a lightweight, transparent desktop overlay for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) on macOS. Clui wraps the Claude Code CLI in a floating pill interface with multi-tab sessions, a permission approval UI, voice input, and a skills marketplace.
+The pill stays the main interface. Its slim composer shelf holds the folder, agent/model, reasoning, access level, and current Git branch. **Liquid Glass** is the default theme: native macOS glass with black (`#0A0A0A`) and white (`#FDFDFD`) tints and Burgundy, rose, cream, and ivory accents. The rounded input keeps its small settings bar attached underneath. macOS 26+ uses Liquid Glass; older macOS versions use native frosted material. Drag the top-right resize handle to adjust the panel; double-click it to reset. **Burgundy** and **Tidal** complete the three-theme collection. All three support light, dark, and system appearance.
 
-![Hero](resources/hero.jpeg)
+## Conversations and workspace
 
-## Features
+- Choose Claude Code, Codex, or OpenCode beneath the input. Changing agents continues the conversation using a context handoff.
+- Branch a conversation with the branch button. The branch retains the source history.
+- Open the workspace for merge-back, worktrees, source control, scheduling, delegation, plan mode, checkpoints, and detailed run controls. It shares the pill's conversations and opens only when requested.
+- Model and reasoning options come from the agent's live catalog. Access choices include **Ask first**, **Auto**, and **Full access**, with **Allow edits** where supported. Codex and Claude use native automatic review; OpenCode Auto allows edits and asks before other actions.
+- History includes durable GLUI conversations and native CLI sessions. “Open in CLI” resumes the matching native conversation.
+- Queues, execution state, checkpoints, and schedules are persisted. Schedules run while GLUI is open, including when the pill and workspace windows are hidden.
+- `⌥ Space` toggles the pill (fallback `⌘⇧K`). Voice transcription stays local.
 
-- **Floating overlay** - transparent, click-through window that stays on top. Toggle with `⌥ + Space` (fallback: `Cmd+Shift+K`).
-- **Multi-tab sessions** - each tab spawns its own `claude -p` process with independent session state.
-- **Permission approval UI** - intercepts tool calls via PreToolUse HTTP hooks so you can review and approve/deny from the UI.
-- **Conversation history** - browse and resume past Claude Code sessions.
-- **Skills marketplace** - install plugins from Anthropic's GitHub repos without leaving Clui.
-- **Voice input** - local speech-to-text via Whisper (required, installed automatically).
-- **File & screenshot attachments** - paste images or attach files directly.
-- **Dual theme** - dark/light mode with system-follow option.
+The workspace bundles [T3 Code Orchestrator V2](https://github.com/pingdotgg/t3code/pull/2829) at the revision in [UPSTREAM.json](orchestrator/UPSTREAM.json), under its original MIT license. Additional upstream drivers are available in workspace provider settings. See the [feature map](docs/orchestrator-v2-audit.md).
 
-> [!IMPORTANT]
-> Clui is not yet notarized with Apple. macOS Gatekeeper may block the first launch. See the install sections below for the workaround. Notarization is coming soon.
+## Skills
 
-## Install
+The skills.sh-inspired directory offers searchable skills from public repositories. **Add** installs a full skill folder once and links it into available compatible agents. Installed rows show the linked providers; **Remove** removes only GLUI-managed links and files. Existing skills are preserved. Native provider plugins and hooks retain their own configuration.
 
-### Website
+## Run locally
 
-Visit **[clui.app](https://clui.app)** to install via Homebrew or download the `.dmg` directly, it auto-detects your Mac's architecture.
+Requires macOS 13+, Node.js 24.13.1+, Rust 1.95+ for the bundled native workspace component, Xcode Command Line Tools, and at least one authenticated agent CLI.
 
-<a href="https://clui.app">
-  <img src="resources/homepage.jpeg" alt="Clui website" width="600" />
-</a>
-
-### Homebrew
-
-```bash
-brew install --cask Youssef2430/clui/clui
-```
-
-### DMG Download
-
-Download the latest `.dmg` from [Releases](https://github.com/Youssef2430/clui/releases):
-
-- **Apple Silicon (M1+):** `Clui-x.x.x-arm64.dmg`
-- **Intel:** `Clui-x.x.x.dmg`
-
-> **First launch:** macOS may block the app because it's not notarized. Go to **System Settings > Privacy & Security > Open Anyway**, or run:
-> ```bash
-> xattr -cr /Applications/Clui.app
-> ```
-> You only need to do this once.
-
-## Prerequisites
-
-- **macOS 13+** (Ventura or later)
-- **Claude Code CLI** - install with `npm install -g @anthropic-ai/claude-code` and authenticate by running `claude`
-
-> **No API keys or `.env` file required.** Clui uses your existing Claude Code CLI authentication (Pro/Team/Enterprise subscription).
-
-## How It Works
-
-```
-UI prompt → Main process spawns claude -p → NDJSON stream → live render
-                                         → tool call? → permission UI → approve/deny
-```
-
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full deep-dive.
-
-<details>
-<summary><strong>Development</strong></summary>
-
-```bash
+```sh
 git clone https://github.com/Youssef2430/clui.git
 cd clui
 npm install
+npm run setup
 npm run dev
 ```
 
-Renderer changes update instantly. Main-process changes require restarting `npm run dev`.
+| Agent | Install | Authenticate |
+| --- | --- | --- |
+| Claude Code | `npm install -g @anthropic-ai/claude-code` | `claude` |
+| Codex | `npm install -g @openai/codex` | `codex login` |
+| OpenCode | `npm install -g opencode-ai` | `opencode auth login` |
 
-### Commands
+GLUI uses existing CLI authentication. Models remain subject to the connected account's availability and usage limits.
 
 | Command | Purpose |
-|---------|---------|
-| `npm run dev` | Start in dev mode with hot reload |
-| `npm run build` | Production build (no packaging) |
-| `npm run dist` | Package as macOS `.app` into `release/` |
-| `npm run dist:dmg` | Build DMG + ZIP for both architectures |
-| `npm run doctor` | Run environment diagnostic |
+| --- | --- |
+| `npm run build` | Build the runtime and floating pill |
+| `npm start` | Start the built pill and its runtime |
+| `npm run typecheck && npm test` | Check the pill and integration logic |
+| `npm run test:workspace` | V2, scheduling, recovery, and orchestration MCP tests |
+| `npm run smoke:electron` | Isolated desktop API smoke check |
+| `npm run dist:local` | Build an ad-hoc signed local `GLUI.app` |
+| `npm run dist:dmg` | Build a local DMG and update ZIP |
+| `npm run dist:release` | Sign and notarize both Mac architectures, with a combined update feed |
+| `npm run build --prefix web` | Build the marketing website |
 
-</details>
+Release packaging requires Developer ID and Apple notarization credentials. Building does not publish a GitHub release.
 
-## Troubleshooting
+## Migration
 
-For setup issues and recovery commands, see [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
+GLUI continues this fork of [Lucas Couto's Clui CC](https://github.com/lcoutodemos/clui-cc). The existing bundle identifier and release repository remain stable. Existing appearance preferences are preserved; Burgundy is the default for a fresh profile. CLI histories and credentials remain in their original locations. New orchestration state lives in `~/.glui`, separately from T3 Code.
 
-Quick self-check:
-
-```bash
-npm run doctor
-```
-
-## Known Limitations
-
-- **macOS only** - transparent overlay, tray icon, and node-pty are macOS-specific.
-- **Requires Claude Code CLI** - Clui is a UI layer, not a standalone AI client.
-
-## Q&A
-> Why didn't you just contribute to the original project ?
->
-> > I just got excited about the project and at first wanted a better way to install it and keep up with its versions but I ended up using it and wanting to add some features so I figured I'd use it as a base conva to build on top!
+See [architecture](docs/ARCHITECTURE.md) and [verification](docs/glui-transition.md).

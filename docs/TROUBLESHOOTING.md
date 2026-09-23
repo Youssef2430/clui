@@ -132,7 +132,7 @@ To allow it:
 
 1. Open **System Settings → Privacy & Security**
 2. Scroll to the security section
-3. Click **Open Anyway** next to the Clui message
+3. Click **Open Anyway** next to the GLUI message
 
 You only need to do this once. This is a local build, not App Store distribution.
 
@@ -201,3 +201,15 @@ Try:
 - `⌥ + Space`
 - `Cmd+Shift+K`
 - Confirm app is running from the menu bar tray
+
+## GLUI agents
+
+Choose **Settings → Agents → Refresh** after installing a CLI. At least one of `claude`, `codex`, or `opencode` must be on your login-shell PATH. Missing agents remain visible but disabled in the picker.
+
+Authenticate in a terminal with `claude`, `codex login`, or `opencode auth login`. Installation does not imply a valid login. If OpenCode reports an expired token, reconnect the affected provider through its CLI or choose another configured model in GLUI. GLUI does not modify your credentials.
+
+The agent picker opens a new conversation when switching from a tab that already has messages. History belongs to the selected agent. A native session ID cannot be resumed by another provider.
+
+If a run fails, its error remains in the conversation. Stop clears the active turn and queued prompts; retry the prompt after correcting the CLI configuration. `/compact`, `/mcp`, `/skills`, and `/context` are Claude-specific UI commands; use terminal handoff for equivalent provider-native controls.
+
+For an incomplete Electron dependency install, run `npm rebuild electron`. To build without release signing credentials, use `npm run dist:local`. The existing Electron profile is retained under the legacy `clui` application-support directory deliberately.

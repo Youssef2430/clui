@@ -1,172 +1,43 @@
-# Clui Architecture
+# GLUI architecture
 
-## Overview
+GLUI keeps its floating Electron pill as the default window. The pill owns hotkeys, window positioning, local voice input, attachments, the skills directory, and desktop notifications. Its conversations use the bundled Orchestrator V2 runtime in `orchestrator/`.
 
-Clui is an Electron desktop application that provides a graphical interface for Claude Code CLI. It spawns `claude -p` subprocesses, parses their NDJSON output, and presents conversations in a floating overlay window.
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     Renderer Process                         │
-│  React 19 + Zustand 5 + Tailwind CSS 4 + Framer Motion      │
-│                                                              │
-│  ┌──────────┐ ┌──────────────┐ ┌──────────┐ ┌────────────┐  │
-│  │ TabStrip  │ │Conversation  │ │ InputBar │ │ Marketplace│  │
-│  │          │ │   View       │ │          │ │   Panel    │  │
-│  └──────────┘ └──────────────┘ └──────────┘ └────────────┘  │
-│                         │                                    │
-│                    sessionStore (Zustand)                     │
-│                         │                                    │
-│              window.clui (preload bridge)                     │
-├──────────────────────────────────────────────────────────────┤
-│                     Preload Script                            │
-│  Typed IPC bridge — contextBridge.exposeInMainWorld          │
-├──────────────────────────────────────────────────────────────┤
-│                     Main Process                             │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │                   ControlPlane                        │    │
-│  │  Tab registry, session lifecycle, queue management    │    │
-│  │                                                       │    │
-│  │  ┌─────────────┐  ┌──────────────────┐               │    │
-│  │  │ RunManager   │  │ EventNormalizer  │               │    │
-│  │  │ Spawns       │  │ Raw stream-json  │               │    │
-│  │  │ claude -p    │──│ → canonical      │               │    │
-│  │  │ per prompt   │  │   events         │               │    │
-│  │  └─────────────┘  └──────────────────┘               │    │
-│  └──────────────────────────────────────────────────────┘    │
-│                                                              │
-│  ┌────────────────────┐  ┌────────────────────────────┐      │
-│  │ PermissionServer   │  │ Marketplace Catalog        │      │
-│  │ HTTP hooks on      │  │ GitHub raw fetch + cache   │      │
-│  │ 127.0.0.1:19836    │  │ TTL: 5 minutes             │      │
-│  └────────────────────┘  └────────────────────────────┘      │
-└──────────────────────────────────────────────────────────────┘
-         │                              │
-    claude -p (NDJSON)          raw.githubusercontent.com
-    (local subprocess)          (optional, cached)
+```text
+Floating pill → isolated preload → WorkspaceControlPlane
+                                    ↓ private parent/child IPC
+                               Owned workspace process
+                                    ↓ typed RPC / atom commands
+                               Orchestrator V2 server
+                                    ↓ provider adapters
+                           Claude Code / Codex / OpenCode
 ```
 
-## Main Process (`src/main/`)
+The workspace process starts with the pill and initially hides its window. Opening the workspace reveals the same canonical conversation, with the full branch, worktree, merge-back, scheduling, delegation, plan, source-control, and recovery interfaces. Closing that window hides it; quitting GLUI stops the owned runtime. Schedules require GLUI to be running.
 
-### ControlPlane (`claude/control-plane.ts`)
+Native glass lives in a noninteractive AppKit child panel ordered behind the foreground Electron window. Putting `NSGlassEffectView` inside Chromium's compositor causes it to sample and obscure text, even when the native view is inserted below Chromium's views. Keep these rendering surfaces separate. The backing follows the parent position and visibility; only the foreground handles input. The native addon must be unpacked from ASAR when packaging.
 
-Single authority for all tab and session lifecycle. Manages:
+The renderer applies the black/white base tint once through a compound SVG path, so overlapping pill, shelf, header, and action surfaces do not accumulate dark bands. The thread body shares that surface rather than painting a second fill. Popovers also need their own Chromium background and backdrop blur to occlude lower foreground text; native glass alone cannot occlude content in the separate foreground window. Composer menus clear the closed header (or the input when a thread is expanded) and reposition when the panel resizes.
 
-- **Tab registry** — maps tabId → session metadata, status, process PID.
-- **State machine** — each tab transitions through: `connecting → idle → running → completed → failed → dead`.
-- **Request routing** — maps requestIds to active RunManager instances.
-- **Queue + backpressure** — max 32 pending requests, prompts queue behind running tasks.
-- **Health reconciliation** — responds to renderer polls with tab status + process liveness.
-- **Session ID tracking** — maps Claude session IDs to tabs for permission routing.
+## Identity and persistence
 
-### RunManager (`claude/run-manager.ts`)
+Pill tabs are views of durable V2 threads. `glui:<thread-id>` identifies a canonical conversation; native provider IDs are resolved separately for terminal continuation. Provider selection changes the existing thread's model selection and uses V2 context handoff on the next turn. Branching uses a source run and preserves inherited history.
 
-Spawns one `claude -p --output-format stream-json` process per prompt. Responsibilities:
+V2 owns SQLite persistence, command receipts, execution attempts, the effect outbox, checkpoint history, queued turns, pending interactions, and restart recovery. The old `agents/control-plane.ts` and transport helpers remain for native history compatibility and focused protocol tests; they no longer dispatch pill prompts.
 
-- Constructs CLI arguments (`--resume`, `--permission-mode`, `--settings`, `--add-dir`, etc.)
-- Reads NDJSON from stdout line-by-line via `StreamParser`.
-- Passes raw events to `EventNormalizer` for canonicalization.
-- Maintains stderr ring buffer (100 lines) for error diagnostics.
-- Cleans up process on cancel, tab close, or unexpected exit.
-- Removes `CLAUDECODE` from spawned environment to prevent credential leakage.
+The original Electron preference directory remains intact. The runtime defaults to `~/.glui`, with `GLUI_HOME` as an override. `GLUI_USER_DATA_DIR` isolates the pill profile and its child workspace for testing. Neither process adopts the host T3 application's data directory. CLI authentication remains owned by each provider.
 
-### EventNormalizer (`claude/event-normalizer.ts`)
+## Process boundary
 
-Maps raw Claude Code stream-json events to canonical `NormalizedEvent` types:
+The pill starts the workspace executable with an inherited Node IPC channel. A launch flag alone cannot activate this bridge: it also requires `process.send`. Workspace preload replies are accepted only from the application's own top-level `glui://app` renderer. The pill receives plain JSON projections and never needs the workspace's auth tokens. Renderer code has no Node access.
 
-| Raw Event | Normalized Event |
-|-----------|-----------------|
-| `system` (subtype: init) | `session_init` |
-| `stream_event` (content_block_delta, text_delta) | `text_chunk` |
-| `stream_event` (content_block_start, tool_use) | `tool_call` |
-| `stream_event` (content_block_delta, input_json_delta) | `tool_call_update` |
-| `stream_event` (content_block_stop) | `tool_call_complete` |
-| `assistant` | `task_update` |
-| `result` | `task_complete` |
-| `rate_limit_event` | `rate_limit` |
+`orchestrator/packages/shared/src/gluiPill.ts` defines this private boundary. The workspace bridge uses the same typed commands and projections as its own UI. Streamed snapshots are coalesced before IPC; unchanged message objects retain their identity in the pill so memoized markdown avoids repeated work.
 
-### PermissionServer (`hooks/permission-server.ts`)
+## Skills directory
 
-HTTP server that intercepts Claude Code tool calls via PreToolUse hooks:
+The store downloads a complete skill folder at the catalog's source revision into GLUI's canonical skills directory, then creates relative symlinks into detected compatible agents. The installer serializes mutations, validates source paths and skill metadata, refuses collisions with existing files, rolls back failed updates, and removes only links that still target its own managed copy. New compatible agents receive links during reconciliation. Tests use fake homes; UI smoke profiles isolate actual installations.
 
-1. ControlPlane starts PermissionServer on `127.0.0.1:19836`.
-2. `generateSettingsFile()` creates a temp JSON file with hook config pointing at the server.
-3. RunManager passes `--settings <path>` to each `claude -p` spawn.
-4. When Claude wants to use a tool, the CLI POSTs to the hook URL.
-5. PermissionServer emits a `permission-request` event to ControlPlane.
-6. ControlPlane routes it to the correct tab via `_findTabBySessionId()`.
-7. Renderer shows a `PermissionCard` with Allow/Deny buttons.
-8. User decision flows back: IPC → ControlPlane → PermissionServer → HTTP response.
-9. Claude Code proceeds or skips the tool based on the response.
+The directory supports portable `SKILL.md` packages. Agent-specific plugin hooks, authentication, and MCP configuration are not treated as portable skills.
 
-Security: per-launch app secret, per-run tokens, sensitive field masking, 5-minute auto-deny timeout.
+## Upstream
 
-### Marketplace Catalog (`marketplace/catalog.ts`)
-
-Fetches plugin metadata from three Anthropic GitHub repos:
-- `anthropics/skills` (Agent Skills)
-- `anthropics/knowledge-work-plugins` (Knowledge Work)
-- `anthropics/financial-services-plugins` (Financial Services)
-
-Uses Electron's `net.request()` with a 5-minute TTL cache. Individual fetch failures are isolated — one broken repo doesn't block others.
-
-### Skill Installer (`skills/installer.ts`)
-
-Auto-installs bundled skills on startup (currently: `skill-creator`). Uses pinned commit SHAs for deterministic downloads. Atomic install: validates in temp dir before swapping into `~/.claude/skills/`. Respects user-managed skills (skips if no `.clui-version` marker). Managed by Clui's skill installer.
-
-## Preload (`src/preload/`)
-
-The preload script uses `contextBridge.exposeInMainWorld` to expose a typed `window.clui` API. This is the only communication surface between renderer and main process.
-
-All methods map to `ipcRenderer.invoke()` (request-response) or `ipcRenderer.send()` (fire-and-forget). The full API surface is defined in the `CluiAPI` interface.
-
-## Renderer (`src/renderer/`)
-
-### State Management
-
-Single Zustand store (`stores/sessionStore.ts`) holds all application state:
-- Tab list with full `TabState` objects (messages, status, attachments, permissions, etc.)
-- Active tab selection
-- Marketplace state (catalog, search, filter, install progress)
-- UI state (expanded, marketplace open)
-
-### Theme System (`theme.ts`)
-
-Dual color palette (dark + light) defined as JS objects. `useColors()` hook returns the active palette reactively. All tokens are synced to CSS custom properties via `syncTokensToCss()` so CSS files can reference `var(--clui-*)`.
-
-Theme mode state machine: `system | light | dark` with separate `_systemIsDark` tracking for OS value.
-
-### Key Components
-
-- **TabStrip** — tab bar with new tab, history picker, settings popover.
-- **ConversationView** — scrollable message timeline with markdown rendering (react-markdown + remark-gfm), tool call cards, permission cards.
-- **InputBar** — prompt input with attachment chips, voice recording, slash command menu, model picker.
-- **MarketplacePanel** — plugin browser with search, semantic tag filters, install confirmation.
-
-### Performance Patterns
-
-- Narrow Zustand selectors with custom equality functions (field-level comparison) to prevent re-renders during streaming.
-- RAF-throttled mousemove handler for click-through detection.
-- Debounced marketplace search (200ms).
-- Health reconciliation skips setState when no tabs changed.
-
-## IPC Channel Map
-
-All channels are defined in `src/shared/types.ts` under the `IPC` const. Events flow through a single IPC channel for all Claude Code stream events, with separate channels for tab status changes and enriched errors.
-
-## Data Flow: Prompt → Response
-
-```
-User types prompt
-    → InputBar calls window.clui.prompt(tabId, requestId, options)
-    → ipcRenderer.invoke('clui:prompt', ...)
-    → Main: ControlPlane.prompt()
-    → RunManager spawns: claude -p --output-format stream-json --resume <sid>
-    → Claude CLI writes NDJSON to stdout
-    → StreamParser emits lines
-    → EventNormalizer maps to NormalizedEvent
-    → ControlPlane updates tab state + broadcasts via IPC
-    → Renderer: useClaudeEvents hook receives events
-    → sessionStore.handleNormalizedEvent() updates messages
-    → React re-renders ConversationView
-```
+The MIT-licensed implementation is pinned in `orchestrator/UPSTREAM.json`. Internal package and protocol names remain compatible. Keep provider-shaped logic in its adapters and durable execution logic in V2; avoid creating a second pill-only orchestration implementation.

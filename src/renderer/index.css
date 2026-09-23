@@ -4,7 +4,7 @@
 /*
  * ─── Theme CSS Variables ───
  * Generated at runtime by syncTokensToCss() in theme.ts.
- * Do NOT define --clui-* vars here — JS tokens are the single source of truth.
+ * Do NOT define --glui-* vars here — JS tokens are the single source of truth.
  */
 
 html, body, #root {
@@ -13,7 +13,7 @@ html, body, #root {
   background: transparent !important;
   overflow: hidden;
   user-select: none;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Avenir Next', Avenir, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -22,7 +22,7 @@ html, body, #root {
   display: inline-block;
   width: 1.5px;
   height: 1.15em;
-  background: var(--clui-text-primary);
+  background: var(--glui-text-primary);
   vertical-align: text-bottom;
   animation: mirror-caret-blink 1s step-end infinite;
 }
@@ -40,11 +40,11 @@ html, body, #root {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--clui-scroll-thumb);
+  background: var(--glui-scroll-thumb);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--clui-scroll-thumb-hover);
+  background: var(--glui-scroll-thumb-hover);
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
@@ -52,9 +52,96 @@ html, body, #root {
 
 /* ─── Glass surface — shared card/pill style ─── */
 .glass-surface {
-  background: var(--clui-container-bg);
-  border: 1px solid var(--clui-container-border);
-  box-shadow: var(--clui-card-shadow);
+  position: relative;
+  background: var(--glui-container-bg);
+  border: 1px solid var(--glui-container-border);
+  box-shadow: var(--glui-card-shadow);
+}
+
+/* Preserve the rounded input with its small attached control bar underneath. */
+.glui-conversation-body { background: color-mix(in srgb, var(--glui-container-bg) 75%, transparent); }
+
+/* Non-macOS fallback. Native AppKit supplies the real optics when available. */
+[data-palette="glass"] :is(.glass-surface, .glui-popover) {
+  background-image: var(--glui-material-sheen) !important;
+  box-shadow: var(--glui-card-shadow) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.45);
+  backdrop-filter: blur(24px) saturate(1.45);
+}
+/* A thin, directional rim gives the material thickness without whitening
+   the whole surface. The mask leaves the content and hit targets untouched. */
+[data-palette="glass"] :is(.glass-surface, .glui-popover)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--glui-material-rim);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.native-glass[data-palette="glass"] :is(.glass-surface, .glui-popover) {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.native-glass[data-palette="glass"] .glass-surface::after { opacity: .72; }
+/* The attached shelf's hidden top edge must not shine through the input. */
+[data-palette="glass"] .composer-shelf::after { clip-path: inset(12px 0 0); }
+[data-palette="glass"] [data-glui-shell][data-expanded="false"]::after { clip-path: inset(0 0 8px); }
+.native-material-tint { display: none; position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+.native-glass[data-palette="glass"] .native-material-tint { display: block; fill: url(#glui-material-wash); fill-rule: nonzero; }
+[data-palette="glass"] .glui-conversation-body { background: transparent; }
+/* Native glass sits below Chromium. A menu must also cover lower DOM content
+   in Chromium's own compositor, or the pill's text shows through the menu. */
+.native-glass[data-palette="glass"] .glui-popover {
+  background: var(--glui-popover-bg) !important;
+  background-image: var(--glui-material-sheen) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(1.3);
+  backdrop-filter: blur(32px) saturate(1.3);
+  border-color: var(--glui-popover-border) !important;
+  box-shadow: var(--glui-popover-shadow) !important;
+}
+.native-glass[data-palette="glass"] .stack-btn:hover:not(:disabled),
+.native-glass[data-palette="glass"] .stack-btn:focus-visible {
+  background: var(--glui-surface-hover) !important;
+}
+[data-palette="glass"] .glui-send {
+  background-image: linear-gradient(155deg, rgba(255,255,255,.2), transparent 65%) !important;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.35), inset 0 -1px 1px rgba(0,0,0,.12), 0 3px 7px rgba(0,0,0,.18);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+[data-palette="glass"] .glui-send:hover { transform: translateY(-1px); }
+[data-palette="glass"] .glui-send:active { transform: scale(.94); }
+
+.theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; padding: 3px 0 5px; }
+.theme-option { min-width: 0; padding: 4px; border: 1px solid transparent; border-radius: 11px; color: var(--glui-text-primary); text-align: left; transition: background .15s, border-color .15s; }
+.theme-option:hover { background: var(--glui-surface-hover); }
+.theme-option[aria-pressed="true"] { background: var(--glui-accent-light); border-color: var(--glui-accent-border-medium); }
+.theme-preview { position: relative; display: block; height: 46px; border-radius: 7px; overflow: hidden; }
+.theme-preview-glass { background-image: linear-gradient(135deg, #0a0a0a, #393939 49%, #fdfdfd 50%, #e4e4e4); }
+.theme-preview-orb { position: absolute; width: 42px; height: 42px; right: -10px; top: -13px; border-radius: 50%; opacity: .85; }
+.theme-preview-pill { position: absolute; inset: 17px 7px 9px; border: 1px solid rgba(255,255,255,.8); border-radius: 20px; box-shadow: 0 3px 6px #00000018; backdrop-filter: blur(5px); }
+.theme-preview-pill > span { position: absolute; width: 8px; height: 8px; border-radius: 50%; right: 4px; top: 5px; }
+.theme-selected { position: absolute; top: 3px; left: 3px; display: grid; place-items: center; width: 14px; height: 14px; color: #fff; background: #34343d; border-radius: 50%; }
+.theme-name { display: block; margin-top: 6px; font-size: 10px; font-weight: 600; white-space: nowrap; letter-spacing: -.2px; }
+.theme-description { display: block; margin-top: 1px; font-size: 9px; color: var(--glui-text-tertiary); white-space: nowrap; }
+.appearance-options { display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--glui-surface-primary); }
+.appearance-options button { padding: 4px 7px; border-radius: 5px; font-size: 10px; color: var(--glui-text-secondary); transition: background .15s, color .15s; }
+.appearance-options button:hover { color: var(--glui-text-primary); }
+.appearance-options button[aria-pressed="true"] { background: var(--glui-tab-active); box-shadow: 0 1px 3px #00000012; color: var(--glui-text-primary); }
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root[data-palette="glass"] :is(.glass-surface, .glui-popover) {
+    background: var(--glui-material-opaque) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    border: 1px solid var(--glui-text-tertiary) !important;
+  }
 }
 
 /* ─── Textarea reset ─── */
@@ -68,7 +155,7 @@ textarea:focus {
 }
 textarea::placeholder,
 input::placeholder {
-  color: var(--clui-placeholder);
+  color: var(--glui-placeholder);
 }
 
 /* ─── Allow text selection in conversation content ─── */
@@ -80,7 +167,7 @@ input::placeholder {
 
 /* ─── Prose overrides for markdown ─── */
 .prose-cloud {
-  color: var(--clui-text-primary);
+  color: var(--glui-text-primary);
   line-height: 1.6;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -89,16 +176,16 @@ input::placeholder {
   margin: 0.25em 0;
 }
 .prose-cloud pre {
-  background: var(--clui-code-bg);
-  border: 1px solid var(--clui-container-border);
+  background: var(--glui-code-bg);
+  border: 1px solid var(--glui-container-border);
   border-radius: 10px;
   padding: 0.75em 1em;
   font-size: 12px;
   overflow-x: auto;
 }
 .prose-cloud code {
-  background: var(--clui-accent-light);
-  color: var(--clui-accent);
+  background: var(--glui-accent-light);
+  color: var(--glui-accent);
   padding: 0.15em 0.35em;
   border-radius: 4px;
   font-size: 0.9em;
@@ -109,7 +196,7 @@ input::placeholder {
   padding: 0;
 }
 .prose-cloud a {
-  color: var(--clui-accent);
+  color: var(--glui-accent);
   text-decoration: none;
 }
 .prose-cloud a:hover {
@@ -125,12 +212,12 @@ input::placeholder {
 .prose-cloud h1, .prose-cloud h2, .prose-cloud h3, .prose-cloud h4 {
   margin: 0.5em 0 0.25em;
   font-weight: 600;
-  color: var(--clui-text-primary);
+  color: var(--glui-text-primary);
 }
 .prose-cloud blockquote {
-  border-left: 3px solid var(--clui-tool-running-border);
+  border-left: 3px solid var(--glui-tool-running-border);
   padding-left: 0.75em;
-  color: var(--clui-text-secondary);
+  color: var(--glui-text-secondary);
   margin: 0.5em 0;
 }
 .prose-cloud table {
@@ -140,7 +227,7 @@ input::placeholder {
   font-size: 12px;
 }
 .prose-cloud th, .prose-cloud td {
-  border: 1px solid var(--clui-container-border);
+  border: 1px solid var(--glui-container-border);
   padding: 0.4em 0.6em;
   overflow-wrap: anywhere;
 }
@@ -148,14 +235,14 @@ input::placeholder {
   white-space: nowrap;
 }
 .prose-cloud th {
-  background: var(--clui-surface-primary);
+  background: var(--glui-surface-primary);
   font-weight: 600;
 }
 
 /* ─── KaTeX math rendering ─── */
 .prose-cloud .katex {
   font-size: 1em;
-  color: var(--clui-text-primary);
+  color: var(--glui-text-primary);
 }
 .prose-cloud .katex-display {
   margin: 0.6em 0;
@@ -169,7 +256,7 @@ input::placeholder {
 /* ─── Prose overrides for user message bubbles ───
    Inherits layout from .prose-cloud but adapts colors for the user-bubble background. */
 .prose-cloud-user {
-  color: var(--clui-user-bubble-text);
+  color: var(--glui-user-bubble-text);
   line-height: 1.6;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -179,7 +266,7 @@ input::placeholder {
 }
 .prose-cloud-user pre {
   background: rgba(0,0,0,0.12);
-  border: 1px solid var(--clui-user-bubble-border);
+  border: 1px solid var(--glui-user-bubble-border);
   border-radius: 10px;
   padding: 0.75em 1em;
   font-size: 12px;
@@ -198,7 +285,7 @@ input::placeholder {
   padding: 0;
 }
 .prose-cloud-user a {
-  color: var(--clui-accent);
+  color: var(--glui-accent);
   text-decoration: none;
 }
 .prose-cloud-user a:hover {
@@ -217,7 +304,7 @@ input::placeholder {
   color: inherit;
 }
 .prose-cloud-user blockquote {
-  border-left: 3px solid var(--clui-user-bubble-border);
+  border-left: 3px solid var(--glui-user-bubble-border);
   padding-left: 0.75em;
   opacity: 0.8;
   margin: 0.5em 0;
@@ -229,7 +316,7 @@ input::placeholder {
   font-size: 12px;
 }
 .prose-cloud-user th, .prose-cloud-user td {
-  border: 1px solid var(--clui-user-bubble-border);
+  border: 1px solid var(--glui-user-bubble-border);
   padding: 0.4em 0.6em;
   overflow-wrap: anywhere;
 }
@@ -276,7 +363,7 @@ input::placeholder {
 .circles-out {
   position: absolute;
   right: calc(100% + 10px);
-  bottom: 0;
+  top: 2px;
   height: 46px;
   display: flex;
   align-items: center;
@@ -298,14 +385,15 @@ input::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--clui-text-tertiary);
+  color: var(--glui-text-tertiary);
   cursor: pointer;
   transition: right 0.4s cubic-bezier(0.34, 1.3, 0.64, 1),
               color 0.15s ease,
               background 0.15s ease;
 }
-.stack-btn:hover:not(:disabled) { color: var(--clui-btn-hover-color); background: var(--clui-btn-hover-bg); }
-.stack-btn:disabled { color: var(--clui-btn-disabled); cursor: default; }
+.stack-btn:hover:not(:disabled), .stack-btn:focus-visible { color: var(--glui-btn-hover-color); background-color: var(--glui-btn-hover-bg); }
+.stack-btn:active:not(:disabled) { transform: scale(.96); }
+.stack-btn:disabled { color: var(--glui-btn-disabled); cursor: default; }
 
 /* Collapsed: stacked on the right, overlapping */
 .stack-btn-1 { right: 0;    z-index: 3; }
@@ -314,9 +402,61 @@ input::placeholder {
 
 /* Expanded on hover: spread evenly */
 .btn-stack:hover .stack-btn-1 { right: 0; }
-.btn-stack:hover .stack-btn-2 { right: 56px; }
-.btn-stack:hover .stack-btn-3 { right: 112px; }
+.btn-stack:hover .stack-btn-2 { right: var(--glui-stack-step, 56px); }
+.btn-stack:hover .stack-btn-3 { right: calc(var(--glui-stack-step, 56px) * 2); }
 
 .no-drag {
   cursor: default;
+}
+
+.glui-wordmark { font-family: 'Avenir Next', Avenir, sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -1.5px; padding-left: 12px; }
+:focus-visible { outline: 2px solid var(--glui-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* The top of the shelf tucks behind the input; no gap or detached third pill. */
+.composer-shelf { position: relative; z-index: 1; display: flex; align-items: center; gap: 4px; margin: -12px 16px 0; padding: 12px 8px 2px; border-radius: 18px; min-height: 44px; }
+.composer-control { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 4px; min-width: 0; height: 26px; border-radius: 7px; font-size: 11px; white-space: nowrap; transition: background .12s, color .12s; }
+.composer-control:hover:not(:disabled), .composer-control[aria-expanded=true] { background: var(--glui-surface-hover); color: var(--glui-text-primary); }
+.composer-control:disabled { opacity: .5; cursor: default; }
+.composer-divider { width: 1px; height: 13px; margin: 0 2px; background: var(--glui-container-border); flex-shrink: 0; }
+.composer-option { display: flex; align-items: center; justify-content: space-between; text-align: left; gap: 12px; width: 100%; border-radius: 9px; padding: 9px 10px; font-size: 12px; transition: background .1s; }
+.composer-option:hover, .composer-option:focus-visible { background: var(--glui-surface-hover); outline: none; }
+.composer-provider { display: flex; justify-content: center; align-items: center; gap: 6px; flex: 1; padding: 8px 5px; border-radius: 9px; font-size: 11px; }
+.composer-provider:disabled { opacity: .4; cursor: default; }
+.composer-menu-title { padding: 8px 10px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--glui-text-tertiary); }
+.composer-empty { display: flex; align-items: center; gap: 8px; padding: 18px 10px; font-size: 12px; color: var(--glui-text-tertiary); }
+button:focus-visible { outline: 2px solid var(--glui-accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+.skill-icon { padding: 5px; border-radius: 7px; color: var(--glui-text-tertiary); }
+.skill-icon:hover { background: var(--glui-surface-hover); color: var(--glui-text-primary); }
+.skill-search { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; }
+.skill-row-name { flex: 1; min-width: 0; text-align: left; padding: 12px 0; white-space: nowrap; }
+.skill-row-name:hover { opacity: .75; }
+.skill-action { display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border-radius: 7px; font-size: 10px; font-weight: 500; flex-shrink: 0; }
+.skill-action:disabled { opacity: .55; cursor: default; }
+.skill-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 180px; font-size: 12px; color: var(--glui-text-tertiary); }
+.skill-more { width: 100%; padding: 14px; color: var(--glui-accent); font-size: 11px; }
+.composer-folder-label { max-width: 55px; }
+.composer-shelf.wide { gap: 8px; }
+.composer-shelf.wide .composer-folder-label { max-width: 100px; }
+.composer-shelf.compact .composer-control svg:last-child { width: 9px; }
+.composer-shelf.compact { gap: 3px; padding-left: 6px; padding-right: 6px; }
+.composer-shelf.compact .composer-control { gap: 3px; padding-left: 3px; padding-right: 3px; }
+.composer-shelf.compact .composer-control-model, .composer-shelf.compact .composer-control-effort, .composer-shelf.compact .composer-control-access { flex-shrink: 0; }
+.composer-shelf.compact .composer-folder-label { max-width: 40px; }
+.composer-shelf.compact .composer-divider { margin: 0 1px; }
+.composer-control > svg { flex-shrink: 0; }
+.glui-tab-strip button:hover:not(:disabled) { background-color: var(--glui-surface-hover); color: var(--glui-accent) !important; }
+.glui-tab-strip [role="tab"]:hover:not([aria-selected="true"]) { background-color: var(--glui-surface-hover) !important; color: var(--glui-text-primary) !important; }
+.glui-send:hover { background-color: var(--glui-send-hover) !important; }
+.glui-mic:hover:not(:disabled) { background-color: var(--glui-btn-hover-bg) !important; color: var(--glui-accent) !important; }
+
+.panel-resize-handle { position: absolute; z-index: 40; right: -12px; top: -12px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; cursor: ew-resize; touch-action: none; color: var(--glui-text-tertiary); background: var(--glui-container-bg); border: 1px solid var(--glui-container-border); box-shadow: 0 1px 3px #00000014; opacity: .65; transition: opacity .15s; }
+.panel-resize-handle.both { cursor: nesw-resize; }
+.panel-resize-handle:hover, .panel-resize-handle:focus-visible, .panel-resize-handle[aria-pressed="true"] { opacity: 1; color: var(--glui-accent); }
+.panel-resizing, .panel-resizing * { user-select: none !important; }
+.panel-resizing .glui-column { transition: none !important; }
+@media (max-width: 650px) {
+  .composer-shelf { margin-left: 6px; margin-right: 6px; }
+  .composer-control-effort .truncate, .composer-control-access .truncate { max-width: 45px; }
 }

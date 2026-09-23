@@ -10,7 +10,7 @@ export default function Callout() {
             <h2 className="callout-heading">Your terminal just got a <em>window</em>.</h2>
             <p className="callout-sub">
               No subscription. No API key. No drama.<br />
-              Just a quieter way to work with Claude.
+              Just a quieter way to work with your coding agents.
             </p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <a href="#install" className="btn-primary">

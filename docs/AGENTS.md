@@ -1,21 +1,21 @@
-# Agent Guide — Clui
+# Agent Guide — GLUI
 
 > This file is optimized for AI coding agents (Claude Code, Cursor, Copilot, etc.).
 > For human-readable docs see [ARCHITECTURE.md](ARCHITECTURE.md) and [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## What This Project Is
 
-Clui is a **macOS-only Electron overlay** that wraps the Claude Code CLI (`claude -p --output-format stream-json`) in a floating pill UI. It is NOT a web app, NOT a VS Code extension, and does NOT call the Anthropic API directly — it spawns CLI subprocesses.
+GLUI (Glue UI) is a **macOS-only Electron overlay** for Claude Code, Codex, and OpenCode. The desktop app owns CLI subprocesses and uses their native protocols and authentication. The `web/` directory contains the separate marketing website.
 
 ## Quick Reference
 
 | Action | Command |
 |--------|---------|
-| Install deps | `npm install` |
+| Install deps | `npm install && npm run setup` |
 | Dev mode (hot-reload) | `npm run dev` |
-| Type-check / build | `npm run build` |
+| Type-check / tests / build | `npm run check` |
 | Toggle overlay | `⌥ + Space` (fallback: `Cmd+Shift+K`) |
-| Debug logging | `CLUI_DEBUG=1 npm run dev` (writes to `~/.clui-debug.log`) |
+| Debug logging | `GLUI_DEBUG=1 npm run dev` (writes to `~/.glui-debug.log`) |
 
 **Main process changes require full restart.** Renderer changes hot-reload.
 
@@ -24,9 +24,9 @@ Clui is a **macOS-only Electron overlay** that wraps the Claude Code CLI (`claud
 ```
 Renderer (React 19 + Zustand 5 + Tailwind CSS 4)
     ↕  contextBridge IPC (src/preload/index.ts)
-Main Process (Node.js / Electron 33)
+Main Process (Node.js / Electron 44)
     ↕  spawns subprocess
-Claude Code CLI (claude -p --output-format stream-json)
+Claude Code (stream-json) / Codex (app-server) / OpenCode (private HTTP + SSE)
 ```
 
 ### Layer Responsibilities
@@ -34,14 +34,17 @@ Claude Code CLI (claude -p --output-format stream-json)
 | Layer | Directory | Manages |
 |-------|-----------|---------|
 | **Renderer** | `src/renderer/` | UI state, theming, user input, message display |
-| **Preload** | `src/preload/` | Typed IPC bridge (`window.clui` API). Security boundary. |
+| **Preload** | `src/preload/` | Typed IPC bridge (`window.glui` API). Security boundary. |
 | **Main** | `src/main/` | Process lifecycle, tab state machine, permission server, marketplace |
 
 ### Key Files by Concern
 
 | Concern | File(s) |
 |---------|---------|
-| Tab lifecycle & state machine | `src/main/claude/control-plane.ts` |
+| Tab lifecycle & state machine | `src/main/agents/workspace-control-plane.ts` |
+| Provider registry | `src/shared/providers.ts` |
+| Native protocols / runs | `orchestrator/apps/server/src/provider/` |
+| Model catalogs / history | `src/main/agents/catalog.ts`, `src/main/agents/history.ts` |
 | Spawning Claude CLI processes | `src/main/claude/run-manager.ts` |
 | Raw NDJSON → canonical events | `src/main/claude/event-normalizer.ts` |
 | Permission hook server | `src/main/hooks/permission-server.ts` |
@@ -55,14 +58,13 @@ Claude Code CLI (claude -p --output-format stream-json)
 ## Data Flow: Prompt → Response
 
 ```
-InputBar.tsx → window.clui.prompt(tabId, requestId, opts)
-  → ipcRenderer.invoke('clui:prompt')
-  → ControlPlane.prompt()
-  → RunManager spawns: claude -p --output-format stream-json --resume <sid>
-  → stdout emits NDJSON lines
-  → EventNormalizer → NormalizedEvent
+InputBar.tsx → window.glui.prompt(tabId, requestId, opts)
+  → ipcRenderer.invoke('glui:prompt')
+  → ControlPlane.submitPrompt() reserves request ownership
+  → AgentRunManager dispatches the selected native adapter
+  → Native protocol events → NormalizedEvent
   → ControlPlane broadcasts via IPC
-  → useClaudeEvents hook → sessionStore.handleNormalizedEvent()
+  → useAgentEvents hook → sessionStore.handleNormalizedEvent()
   → React re-renders
 ```
 
@@ -74,17 +76,17 @@ All IPC and event types live in `src/shared/types.ts`. Key types:
 - **`TabState`** — full state of a single tab (status, messages, permissions, session metadata)
 - **`TabStatus`** — state machine: `connecting → idle → running → completed/failed/dead`
 - **`IPC`** — const object with all IPC channel names (use these, never raw strings)
-- **`RunOptions`** — options passed when spawning a Claude CLI run
+- **`RunOptions`** — provider, model, directory, prompt, session, and permission options for a run
 - **`CatalogPlugin`** — marketplace plugin metadata
 
 ## Conventions & Rules
 
 ### Must Follow
 
-1. **TypeScript strict mode** — zero errors required (`npm run build` must pass)
+1. **TypeScript strict mode** — zero errors required (`npm run check` must pass)
 2. **Use `IPC.*` constants** for all IPC channel names — never hardcode strings
 3. **Use `useColors()` hook** for all color references in renderer — never hardcode colors
-4. **Narrow Zustand selectors** with custom equality functions for performance
+4. **Narrow Zustand selectors** returning stable references; use Zustand 5-compatible APIs
 5. **All new IPC channels** must be added to `src/shared/types.ts` AND wired in both `src/preload/index.ts` and `src/main/index.ts`
 6. **Tab state transitions** go through `ControlPlane` only — never mutate tab state directly
 
@@ -100,7 +102,7 @@ All IPC and event types live in `src/shared/types.ts`. Key types:
 ### Don't
 
 - Don't import main-process modules from renderer (or vice versa) — the preload bridge is the only crossing point
-- Don't add network calls — the app is designed to be nearly offline (only marketplace fetches from GitHub)
+- Keep network calls in the main process; native agent servers must bind to loopback and use private authentication
 - Don't use `node-pty` for new features — it's legacy, prefer `RunManager` (stdio-based)
 - Don't add Electron `remote` module usage — it's disabled for security
 
@@ -110,7 +112,7 @@ All IPC and event types live in `src/shared/types.ts`. Key types:
 1. Add channel name to `IPC` const in `src/shared/types.ts`
 2. Add handler in `src/main/index.ts` (`ipcMain.handle` or `ipcMain.on`)
 3. Expose via `contextBridge` in `src/preload/index.ts`
-4. Call from renderer via `window.clui.*`
+4. Call from renderer via `window.glui.*`
 
 ### New UI component
 1. Create in `src/renderer/components/`
@@ -133,7 +135,7 @@ All IPC and event types live in `src/shared/types.ts`. Key types:
 
 | Layer | Tech | Version |
 |-------|------|---------|
-| Desktop | Electron | 33 |
+| Desktop | Electron | 44 |
 | Build | electron-vite | 3 |
 | UI | React | 19 |
 | State | Zustand | 5 |
@@ -151,7 +153,7 @@ All IPC and event types live in `src/shared/types.ts`. Key types:
 | `api.github.com/repos/anthropics/*/tarball/*` | Skill auto-install | No |
 | `127.0.0.1:19836` | Permission hook server (local only) | Yes |
 
-No telemetry. No analytics. No auto-update.
+No telemetry or analytics. Packaged builds use the existing GitHub release feed for updates.
 
 ## Common Pitfalls
 

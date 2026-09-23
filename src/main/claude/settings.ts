@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { join, resolve } from 'path'
-import type { ClaudeModelOption, ClaudeModelSettings } from '../../shared/models'
+import type { AgentModelOption, AgentModelSettings } from '../../shared/models'
 
 type ClaudeSettingsFile = {
   env?: Record<string, unknown>
@@ -50,10 +50,10 @@ export function loadClaudeSettingsEnv(projectPath?: string): Record<string, stri
   return env
 }
 
-export function getClaudeModelSettings(projectPath?: string): ClaudeModelSettings {
+export function getClaudeModelSettings(projectPath?: string): AgentModelSettings {
   const env = loadClaudeSettingsEnv(projectPath)
   const defaultModel = env.ANTHROPIC_MODEL || null
-  const options: ClaudeModelOption[] = [
+  const options: AgentModelOption[] = [
     {
       id: null,
       label: 'Default',

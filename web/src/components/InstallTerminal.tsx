@@ -18,14 +18,14 @@ const SEQUENCE: Step[] = [
   { kind: 'output', html: '<span class="term-success">✓</span> <span class="term-info">Tapped 1 cask (Youssef2430/clui/clui)</span>', delay: 560 },
   { kind: 'blank' },
   { kind: 'command', text: 'brew install --cask clui' },
-  { kind: 'output', html: '<span class="term-info">==></span> Downloading Clui.dmg...', delay: 520 },
+  { kind: 'output', html: '<span class="term-info">==></span> Downloading GLUI.dmg...', delay: 520 },
   { kind: 'output', html: '<span class="term-info">######################################## 100.0%</span>', delay: 900 },
   { kind: 'output', html: '<span class="term-info">==></span> Installing Cask clui', delay: 520 },
-  { kind: 'output', html: "<span class=\"term-info\">==></span> Moving App 'Clui.app' to '/Applications/Clui.app'", delay: 460 },
+  { kind: 'output', html: "<span class=\"term-info\">==></span> Moving App 'GLUI.app' to '/Applications/GLUI.app'", delay: 460 },
   { kind: 'output', html: '<span class="term-success">✓</span> clui was successfully installed!', delay: 420 },
   { kind: 'blank' },
-  { kind: 'command', text: 'open -a Clui' },
-  { kind: 'output', html: '<span class="term-success">✓</span> Clui is running · Press <span class="term-cmd">⌥ Space</span> to summon', delay: 620 },
+  { kind: 'command', text: 'open -a GLUI' },
+  { kind: 'output', html: '<span class="term-success">✓</span> GLUI is running · Press <span class="term-cmd">⌥ Space</span> to summon', delay: 620 },
 ]
 
 const PROMPT = '<span class="term-prompt">~ $</span> '

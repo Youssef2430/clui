@@ -50,7 +50,7 @@ export default function DownloadAside({ arm64Url, x64Url }: Props) {
       <div className="download-aside-inner app-glass">
         <p className="download-aside-label">Or download directly</p>
         <p className="download-aside-sub">
-          Grab the <strong>.dmg</strong> and drag Clui into Applications — same result, no Homebrew needed.
+          Grab the <strong>.dmg</strong> and drag GLUI into Applications — same result, no Homebrew needed.
         </p>
 
         <div className="download-aside-links">

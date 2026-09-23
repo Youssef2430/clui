@@ -1,3 +1,4 @@
+import { AgentQuestionCard } from './AgentQuestionCard'
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Markdown from 'react-markdown'
@@ -18,7 +19,7 @@ import { useSessionStore } from '../stores/sessionStore'
 import { PermissionCard } from './PermissionCard'
 import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { getFileIcon } from './FileMentionMenu'
-import { useColors, useThemeStore } from '../theme'
+import { useColors } from '../theme'
 import type { Message, Attachment } from '../../shared/types'
 
 // ─── Constants ───
@@ -37,7 +38,7 @@ const SAFE_LINK_COMPONENTS = {
     <button
       type="button"
       className="underline decoration-dotted underline-offset-2 cursor-pointer"
-      onClick={() => { if (href) window.clui.openExternal(String(href)) }}
+      onClick={() => { if (href) window.glui.openExternal(String(href)) }}
     >
       {children}
     </button>
@@ -81,7 +82,7 @@ function groupMessages(messages: Message[]): GroupedItem[] {
 
 // ─── Main Component ───
 
-export function ConversationView() {
+export function ConversationView({ height = 336 }: { height?: number }) {
   const tabs = useSessionStore((s) => s.tabs)
   const activeTabId = useSessionStore((s) => s.activeTabId)
   const sendMessage = useSessionStore((s) => s.sendMessage)
@@ -93,7 +94,6 @@ export function ConversationView() {
   const isNearBottomRef = useRef(true)
   const prevTabIdRef = useRef(activeTabId)
   const colors = useColors()
-  const expandedUI = useThemeStore((s) => s.expandedUI)
 
   const tab = tabs.find((t) => t.id === activeTabId)
 
@@ -152,7 +152,7 @@ export function ConversationView() {
   const showInterrupt = isRunning && tab.messages.some((m) => m.role === 'user')
 
   if (tab.messages.length === 0) {
-    return <EmptyState />
+    return <div style={{ height, display: 'grid', placeItems: 'center' }}><EmptyState /></div>
   }
 
   // Messages from before initial render cap are "historical" — no motion
@@ -167,7 +167,7 @@ export function ConversationView() {
 
   return (
     <div
-      data-clui-ui
+      data-glui-ui
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -175,7 +175,7 @@ export function ConversationView() {
       <div
         ref={scrollRef}
         className="overflow-y-auto overflow-x-hidden px-4 pt-2 conversation-selectable"
-        style={{ maxHeight: expandedUI ? 460 : 336, paddingBottom: 28 }}
+        style={{ height, maxHeight: height, paddingBottom: 28 }}
         onScroll={handleScroll}
       >
         {/* Load older button */}
@@ -213,6 +213,7 @@ export function ConversationView() {
 
         {/* Permission card (shows first item from queue) */}
         <AnimatePresence>
+          {tab.inputRequests.map(request => <AgentQuestionCard key={request.questionId} tabId={tab.id} request={request} />)}
           {tab.permissionQueue.length > 0 && (
             <PermissionCard
               tabId={tab.id}
@@ -227,7 +228,7 @@ export function ConversationView() {
           {tab.permissionDenied && (
             <PermissionDeniedCard
               tools={tab.permissionDenied.tools}
-              sessionId={tab.claudeSessionId}
+              sessionId={tab.providerSessionId}
               projectPath={staticInfo?.projectPath || process.cwd()}
               onDismiss={() => {
                 useSessionStore.setState((s) => ({
@@ -313,7 +314,7 @@ function EmptyState() {
   const colors = useColors()
 
   const handleChooseFolder = async () => {
-    const dir = await window.clui.selectDirectory()
+    const dir = await window.glui.selectDirectory()
     if (dir) {
       setBaseDirectory(dir)
     }
@@ -401,7 +402,7 @@ function InterruptButton({ tabId }: { tabId: string }) {
   const colors = useColors()
 
   const handleStop = () => {
-    window.clui.stopTab(tabId)
+    window.glui.stopTab(tabId)
   }
 
   return (
@@ -481,9 +482,9 @@ function MessageAttachments({ attachments }: { attachments: Attachment[] }) {
     <div className="flex flex-wrap gap-1.5 pb-1.5">
       {attachments.map((a) => {
         // Resolve image source: prefer base64 dataUrl (instant), fall back to
-        // loading the file from disk via the clui-local:// custom protocol.
+        // loading the file from disk via the glui-local:// custom protocol.
         const imgSrc = a.dataUrl
-          || (a.type === 'image' ? `clui-local://${encodeURIComponent(a.path).replace(/%2F/g, '/')}` : undefined)
+          || (a.type === 'image' ? `glui-local://${encodeURIComponent(a.path).replace(/%2F/g, '/')}` : undefined)
 
         // Image attachments: just the thumbnail, no filename
         if (imgSrc) {
@@ -622,7 +623,7 @@ function UserMessage({ message, skipMotion }: { message: Message; skipMotion?: b
         type="button"
         className="underline decoration-dotted underline-offset-2 cursor-pointer"
         style={{ color: colors.accent }}
-        onClick={() => { if (href) window.clui.openExternal(String(href)) }}
+        onClick={() => { if (href) window.glui.openExternal(String(href)) }}
       >
         {children}
       </button>
@@ -765,7 +766,7 @@ function ImageCard({ src, alt, colors }: { src?: string; alt?: string; colors: R
   // Reset failed state when src changes (e.g. during streaming)
   useEffect(() => { setFailed(false) }, [src])
   const label = alt || 'Image'
-  const open = () => { if (src) window.clui.openExternal(String(src)) }
+  const open = () => { if (src) window.glui.openExternal(String(src)) }
 
   if (failed || !src) {
     return (
@@ -825,7 +826,7 @@ const AssistantMessage = React.memo(function AssistantMessage({
         className="underline decoration-dotted underline-offset-2 cursor-pointer"
         style={{ color: colors.accent }}
         onClick={() => {
-          if (href) window.clui.openExternal(String(href))
+          if (href) window.glui.openExternal(String(href))
         }}
       >
         {children}
@@ -952,8 +953,8 @@ function ToolResultAccordion({ tool }: { tool: Message }) {
       const tab = useSessionStore.getState().tabs.find((t) =>
         t.messages.some((m) => m.id === tool.id)
       )
-      if (tab?.claudeSessionId) {
-        const results = await window.clui.getToolResults(tab.claudeSessionId, tab.workingDirectory)
+      if (tab?.providerSessionId) {
+        const results = await window.glui.getToolResults(tab.providerSessionId, tab.workingDirectory, tab.provider)
         if (results[tool.toolId]) {
           useSessionStore.setState((s) => ({
             tabs: s.tabs.map((t) => ({
@@ -1846,7 +1847,7 @@ function ContextCard({ data, colors }: { data: ContextData; colors: ReturnType<t
 // ─── Cost Card ───
 
 interface CostData {
-  cost: number
+  cost: number | null
   durationMs: number
   turns: number
   inputTokens: number
@@ -1859,7 +1860,7 @@ interface CostData {
 function CostCard({ data, colors }: { data: CostData; colors: ReturnType<typeof useColors> }) {
   const totalTokens = data.inputTokens + data.outputTokens + data.cacheRead + data.cacheCreate
   const durationSec = (data.durationMs / 1000).toFixed(1)
-  const costStr = data.cost < 0.01 ? `$${data.cost.toFixed(4)}` : `$${data.cost.toFixed(2)}`
+  const costStr = data.cost == null ? 'Not reported' : data.cost < 0.01 ? `$${data.cost.toFixed(4)}` : `$${data.cost.toFixed(2)}`
 
   return (
     <div

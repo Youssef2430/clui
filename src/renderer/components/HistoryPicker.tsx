@@ -18,10 +18,9 @@ type HistoryScope = 'project' | 'all'
 
 export function HistoryPicker() {
   const resumeSession = useSessionStore((s) => s.resumeSession)
-  const isExpanded = useSessionStore((s) => s.isExpanded)
+  const isExpanded = useSessionStore((s) => s.isExpanded && !s.marketplaceOpen && !s.searchPanelOpen)
   const activeTab = useSessionStore(
     (s) => s.tabs.find((t) => t.id === s.activeTabId),
-    (a, b) => a === b || (!!a && !!b && a.hasChosenDirectory === b.hasChosenDirectory && a.workingDirectory === b.workingDirectory),
   )
   const staticInfo = useSessionStore((s) => s.staticInfo)
   const popoverLayer = usePopoverLayer()
@@ -47,6 +46,7 @@ export function HistoryPicker() {
   }, [historyPickerOpen])
   const [scope, setScope] = useState<HistoryScope>('all')
   const [sessions, setSessions] = useState<SessionMeta[]>([])
+  const [historyError, setHistoryError] = useState('')
   const [loading, setLoading] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -72,16 +72,15 @@ export function HistoryPicker() {
 
   const loadSessions = useCallback(async (s: HistoryScope) => {
     setLoading(true)
-    try {
-      const result = s === 'all'
-        ? await window.clui.listAllSessions()
-        : await window.clui.listSessions(effectiveProjectPath)
-      setSessions(result)
-    } catch {
-      setSessions([])
-    }
+    setHistoryError('')
+    const results = await Promise.allSettled([
+      s === 'all' ? window.glui.listAllSessions(activeTab?.provider) : window.glui.listSessions(effectiveProjectPath, activeTab?.provider),
+      window.glui.workspaceHistory(activeTab?.provider, s === 'all' ? undefined : effectiveProjectPath),
+    ])
+    setSessions(results.flatMap(result => result.status === 'fulfilled' ? result.value : []).sort((a, b) => Date.parse(b.lastTimestamp) - Date.parse(a.lastTimestamp)))
+    if (results.some(result => result.status === 'rejected')) setHistoryError('Some history could not be loaded.')
     setLoading(false)
-  }, [effectiveProjectPath])
+  }, [effectiveProjectPath, activeTab?.provider])
 
   // Respond to external toggle (Cmd+Shift+H)
   useEffect(() => {
@@ -124,7 +123,7 @@ export function HistoryPicker() {
       : session.slug || 'Resumed'
     // Use the session's original project path if available, otherwise fall back to current
     const projectPath = session.projectPath || effectiveProjectPath
-    void resumeSession(session.sessionId, title, projectPath)
+    void resumeSession(session.sessionId, title, projectPath, session.provider || activeTab?.provider)
   }
 
   return (
@@ -142,12 +141,12 @@ export function HistoryPicker() {
       {popoverLayer && open && createPortal(
         <motion.div
           ref={popoverRef}
-          data-clui-ui
+          data-glui-ui
           initial={{ opacity: 0, y: isExpanded ? -4 : 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: isExpanded ? -4 : 4 }}
           transition={{ duration: 0.12 }}
-          className="rounded-xl"
+          className="glui-popover rounded-xl"
           style={{
             position: 'fixed',
             ...(pos.top != null ? { top: pos.top } : {}),
@@ -199,6 +198,7 @@ export function HistoryPicker() {
               </div>
             )}
 
+            {historyError && <div role="alert" className="px-3 py-2 text-[11px]" style={{ color: colors.statusError }}>{historyError} <button onClick={() => void loadSessions(scope)}>Retry</button></div>}
             {!loading && sessions.length === 0 && (
               <div className="px-3 py-4 text-center text-[11px]" style={{ color: colors.textTertiary }}>
                 No previous sessions found
@@ -218,7 +218,7 @@ export function HistoryPicker() {
                   </div>
                   <div className="flex items-center gap-2 text-[10px] mt-0.5" style={{ color: colors.textTertiary }}>
                     <span>{timeAgo(session.lastTimestamp)}</span>
-                    <span>{formatSize(session.size)}</span>
+                    <span>{session.sessionId.startsWith('glui:') ? 'GLUI conversation' : 'CLI history'}</span>
                     {session.slug && <span className="truncate">{session.slug}</span>}
                   </div>
                   {/* Show project path when viewing all sessions */}
