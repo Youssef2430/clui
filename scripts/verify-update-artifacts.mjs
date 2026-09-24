@@ -11,6 +11,7 @@ import { createHash } from 'crypto'
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { execFileSync } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const releaseDir = join(root, 'release')
@@ -33,7 +34,8 @@ const appDirs = existsSync(releaseDir)
 if (appDirs.length === 0) fail(`no packaged app found under ${releaseDir} (expected mac/ or mac-arm64/)`)
 
 for (const dir of appDirs) {
-  const appUpdatePath = join(releaseDir, dir, `${pkg.build.productName}.app`, 'Contents', 'Resources', 'app-update.yml')
+  const appPath = join(releaseDir, dir, `${pkg.build.productName}.app`)
+  const appUpdatePath = join(appPath, 'Contents', 'Resources', 'app-update.yml')
   if (!existsSync(appUpdatePath)) {
     fail(`${dir}: app-update.yml missing from packaged app — auto-update will not work`)
     continue
@@ -44,6 +46,16 @@ for (const dir of appDirs) {
   if (field('owner') !== publish.owner) fail(`${dir}: app-update.yml owner "${field('owner')}" != "${publish.owner}"`)
   if (field('repo') !== publish.repo) fail(`${dir}: app-update.yml repo "${field('repo')}" != "${publish.repo}"`)
   if (errors.length === 0) ok(`${dir}: app-update.yml present and points at ${publish.owner}/${publish.repo}`)
+  if (process.platform === 'darwin') {
+    try {
+      const entitlements = execFileSync('codesign', ['-d', '--entitlements', ':-', appPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      if (!/<key>com\.apple\.security\.device\.audio-input<\/key>\s*<true\s*\/>/.test(entitlements)) {
+        fail(`${dir}: signed app is missing the microphone entitlement — voice input would stop working after updating`)
+      } else ok(`${dir}: signed app preserves the microphone entitlement`)
+    } catch {
+      fail(`${dir}: could not inspect the signed app's entitlements`)
+    }
+  }
 }
 
 // ─── 2. latest-mac.yml ───

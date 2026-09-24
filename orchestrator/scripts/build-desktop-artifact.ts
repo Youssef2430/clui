@@ -2665,6 +2665,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   // source file was never written fails the electron-builder step.
   wslRuntimeBundled = false,
   arch?: typeof BuildArch.Type,
+  pillEntitlementsPath?: string,
 ) {
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
@@ -2732,6 +2733,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       hardenedRuntime: true,
       notarize: signed,
       ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
+      ...(pillEntitlementsPath
+        ? { entitlements: pillEntitlementsPath, entitlementsInherit: pillEntitlementsPath }
+        : {}),
       ...(macPasskeySigning
         ? {
             entitlements: macPasskeySigning.entitlementsPath,
@@ -3701,6 +3705,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
         : undefined,
       bundlesWslRuntime({ platform: options.platform, runtimeArchivePath: options.wslRuntime }),
       options.arch,
+      pillRoot ? path.join(pillRoot, "resources/entitlements.mac.plist") : undefined,
     ),
     dependencies: { ...stageDependencies, ...(pillRoot ? { "electron-updater": "6.8.9", "@huggingface/transformers": "4.0.1" } : {}) },
     devDependencies: {

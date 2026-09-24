@@ -12,6 +12,7 @@ import type { PillAction, PillReply } from '../../../orchestrator/packages/share
 export class WorkspaceHost extends EventEmitter {
   readonly home = process.env.GLUI_HOME || (process.env.GLUI_USER_DATA_DIR ? join(process.env.GLUI_USER_DATA_DIR, 'workspace') : join(homedir(), '.glui'))
   private child?: ChildProcess
+  private ready = false
   private pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>()
   private closing = false
   start() {
@@ -38,7 +39,7 @@ export class WorkspaceHost extends EventEmitter {
     child.stderr?.on('data', chunk => { stderr = (stderr + String(chunk)).slice(-4000) })
     child.on('message', (reply: PillReply) => {
       if (reply.kind === 'thread') this.emit('thread', reply.thread)
-      if (reply.kind === 'ready') this.emit('ready')
+      if (reply.kind === 'ready') { this.ready = true; this.emit('ready') }
       if (reply.kind === 'response') {
         const request = this.pending.get(reply.id)
         if (!request) return
@@ -49,6 +50,7 @@ export class WorkspaceHost extends EventEmitter {
     const failed = (error: Error) => {
       if (this.child !== child) return
       this.child = undefined
+      this.ready = false
       for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(error) }
       this.pending.clear()
       if (!this.closing) this.emit('failure', error)
@@ -61,7 +63,10 @@ export class WorkspaceHost extends EventEmitter {
     if (!this.child?.connected) return Promise.reject(new Error('GLUI workspace is not available'))
     const id = randomUUID()
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('The workspace did not acknowledge the request. Check its status before retrying.')) }, 90_000)
+      // The first request also waits for Electron, database migrations, and
+      // provider discovery. Cold Intel/Rosetta launches can exceed 90 seconds.
+      const timeout = this.ready ? 90_000 : 240_000
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('The workspace did not acknowledge the request. Check its status before retrying.')) }, timeout)
       this.pending.set(id, { resolve: value => resolve(value as T), reject, timer })
       this.child!.send({ kind: 'request', id, action }, error => {
         if (!error) return
