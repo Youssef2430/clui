@@ -12,7 +12,7 @@ export default function SectionPermissions() {
             <div className="section-label"><span className="section-index">02</span> Permissions</div>
             <h2 className="section-heading">Every action,<br /><em>your</em> approval.</h2>
             <p className="section-sub">
-              Clui intercepts every write, delete, and shell command before it touches your system.
+              GLUI intercepts every write, delete, and shell command before it touches your system.
               Review it, approve it, or deny it in one click. Set permanent rules per project so
               trusted operations never interrupt you again.
             </p>
@@ -20,7 +20,7 @@ export default function SectionPermissions() {
 
           <ScrollReveal delay={0.2}>
             <div className="split-visual">
-              {/* Faithful recreation of Clui's in-app PermissionCard */}
+              {/* Faithful recreation of GLUI's in-app PermissionCard */}
               <div className="perm-card app-glass">
                 <div className="perm-card-header">
                   <ShieldWarning size={12} weight="fill" />

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ──────────────────────────────────────────────────────
-#  Clui — Install App
+#  GLUI — Install App
 #
 #  Double-click this file in Finder to:
 #   1. Set up dependencies
@@ -15,7 +15,7 @@ set -e
 # Resolve to repo root (one level up from commands/)
 cd "$(dirname "$0")/.."
 
-APP_NAME="Clui"
+APP_NAME="GLUI"
 DEST="/Applications/${APP_NAME}.app"
 
 step() { echo; echo "═══ $1 ═══"; echo; }
@@ -86,14 +86,14 @@ fi
 
 step "Step 3/6 — Building ${APP_NAME}.app"
 
-if ! npm run dist; then
+if ! npm run dist:local; then
   echo
   echo "Build failed."
   echo
   echo "  Try these steps one at a time:"
   echo "    rm -rf node_modules"
   echo "    npm install"
-  echo "    npm run dist"
+  echo "    npm run dist:local"
   echo
   echo "  If it still fails, see docs/TROUBLESHOOTING.md"
   echo

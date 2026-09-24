@@ -64,7 +64,7 @@ export function SlashCommandMenu({ filter, selectedIndex, onSelect, anchorRect, 
 
   return createPortal(
     <motion.div
-      data-clui-ui
+      data-glui-ui
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 4 }}
@@ -79,7 +79,7 @@ export function SlashCommandMenu({ filter, selectedIndex, onSelect, anchorRect, 
     >
       <div
         ref={listRef}
-        className="overflow-y-auto rounded-xl py-1"
+        className="glui-popover overflow-y-auto rounded-xl py-1"
         style={{
           maxHeight: 220,
           background: colors.popoverBg,

@@ -39,14 +39,14 @@ export default function SectionSummon() {
             <div className="section-label"><span className="section-index">01</span> The Overlay</div>
             <h2 className="section-heading">Press two keys.<br />Claude <em>appears</em>.</h2>
             <p className="section-sub">
-              Option+Space summons Clui above every window, every app, wherever you are.
+              Option+Space summons GLUI above every window, every app, wherever you are.
               Same shortcut sends it away. It leaves no trace — no dock icon, no menu clutter.
             </p>
           </ScrollReveal>
 
           <ScrollReveal delay={0.2}>
             <div className="split-visual">
-              {/* Faithful recreation of Clui's floating input pill + stacked circle buttons */}
+              {/* Faithful recreation of GLUI's floating input pill + stacked circle buttons */}
               <div className="summon-stage">
                 <div className="summon-row">
                   <div className="summon-circles">

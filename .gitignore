@@ -39,3 +39,15 @@ Desktop.ini
 
 # Deployment
 certificates/*
+
+.glui.pid
+playwright-report/
+test-results/
+.build-tools/
+resources/native/*.node
+
+# Local native screenshot output
+design/glass-review/
+
+# Local website visual review
+design/website-review/

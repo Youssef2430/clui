@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="burgundy" x1="145" y1="82" x2="873" y2="960" gradientUnits="userSpaceOnUse"><stop stop-color="#c34a61"/><stop offset=".52" stop-color="#800020"/><stop offset="1" stop-color="#5f001d"/></linearGradient>
+    <linearGradient id="rim" x1="190" y1="72" x2="820" y2="952" gradientUnits="userSpaceOnUse"><stop stop-color="#fff9f2" stop-opacity=".5"/><stop offset=".4" stop-color="#fff9f2" stop-opacity=".08"/><stop offset="1" stop-color="#fff9f2" stop-opacity=".2"/></linearGradient>
+  </defs>
+  <rect x="72" y="72" width="880" height="880" rx="218" fill="url(#burgundy)"/>
+  <rect x="77" y="77" width="870" height="870" rx="213" fill="none" stroke="url(#rim)" stroke-width="10"/>
+  <path d="M57 22.5A25 25 0 1 0 65 41H43" transform="translate(152 147) scale(9)" fill="none" stroke="#fff9f2" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

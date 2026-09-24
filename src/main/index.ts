@@ -1,3 +1,5 @@
+import { getWorkspaceInfo } from './agents/workspace-info'
+import { refreshGlass, updateGlass } from './glass'
 import { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, Tray, Menu, nativeImage, nativeTheme, shell, systemPreferences, protocol, net } from 'electron'
 import { execFile, spawn } from 'child_process'
 import { basename, join, resolve, normalize } from 'path'
@@ -5,7 +7,7 @@ import { existsSync, readdirSync, statSync, createReadStream, mkdirSync, writeFi
 import { readdir } from 'fs/promises'
 import { createInterface } from 'readline'
 import { homedir, tmpdir } from 'os'
-import { ControlPlane } from './claude/control-plane'
+import { ControlPlane } from './agents/workspace-control-plane'
 import { ensureSkills, type SkillStatus } from './skills/installer'
 import { fetchCatalog, listInstalled, installPlugin, uninstallPlugin } from './marketplace/catalog'
 import { log as _log, LOG_FILE, flushLogs } from './logger'
@@ -15,10 +17,25 @@ import { SearchManager } from './search/search-manager'
 import { IPC, OVERLAY_BAR_WIDTH, OVERLAY_PILL_HEIGHT, OVERLAY_PILL_BOTTOM_MARGIN } from '../shared/types'
 import { isMillionTokenClaudeModel } from '../shared/models'
 import { getClaudeModelSettings } from './claude/settings'
+import { listProviders, getAgentModels } from './agents/catalog'
+import { listAgentSessions, loadAgentSession } from './agents/history'
+import { requireProvider, type ProviderId } from '../shared/providers'
 import type { RunOptions, NormalizedEvent, EnrichedError, BtwOptions, PreferredTerminalId, TerminalId, TerminalInstallation } from '../shared/types'
 
-const DEBUG_MODE = process.env.CLUI_DEBUG === '1'
-const SPACES_DEBUG = DEBUG_MODE || process.env.CLUI_SPACES_DEBUG === '1'
+// Preserve the existing Electron profile and local preferences across the rebrand.
+app.setPath('userData', process.env.GLUI_USER_DATA_DIR || join(app.getPath('appData'), 'clui'))
+app.setName('GLUI')
+
+// One owner per profile keeps two orchestrators from executing the same
+// persisted schedules. Test profiles and separate development profiles each
+// retain their own lock.
+if (!app.requestSingleInstanceLock()) app.exit(0)
+app.on('second-instance', () => {
+  void app.whenReady().then(() => showWindow('second instance'))
+})
+
+const DEBUG_MODE = process.env.GLUI_DEBUG === '1'
+const SPACES_DEBUG = DEBUG_MODE || process.env.GLUI_SPACES_DEBUG === '1'
 
 function log(msg: string): void {
   _log('main', msg)
@@ -139,7 +156,7 @@ requestAnimationFrame(()=>w.classList.add('visible'));
 </script></body></html>`
 
 // Feature flag: enable PTY interactive permissions transport
-const INTERACTIVE_PTY = process.env.CLUI_INTERACTIVE_PERMISSIONS_PTY === '1'
+const INTERACTIVE_PTY = process.env.GLUI_INTERACTIVE_PERMISSIONS_PTY === '1'
 
 const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 
@@ -240,7 +257,6 @@ function readBundleInfo(appPath: string): Promise<PlistObject | null> {
     execFile('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plistPath], {
       encoding: 'utf8',
       maxBuffer: 2 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'ignore'],
     }, (err, stdout) => {
       if (err) {
         resolve(null)
@@ -373,16 +389,18 @@ function quoteForShell(input: string): string {
   return `'${input.replace(/'/g, `'\\''`)}'`
 }
 
-function buildClaudeInvocation(sessionId: string | null): string {
+function buildAgentInvocation(sessionId: string | null, provider: ProviderId = 'claude'): string {
+  if (provider === 'codex') return sessionId ? `codex resume ${quoteForShell(sessionId)}` : 'codex'
+  if (provider === 'opencode') return sessionId ? `opencode --session ${quoteForShell(sessionId)}` : 'opencode'
   return sessionId ? `claude --resume ${quoteForShell(sessionId)}` : 'claude'
 }
 
-function buildClaudeShellCommand(projectPath: string, sessionId: string | null): string {
-  return `cd -- ${quoteForShell(projectPath)} && ${buildClaudeInvocation(sessionId)}`
+function buildAgentShellCommand(projectPath: string, sessionId: string | null, provider: ProviderId = 'claude'): string {
+  return `cd -- ${quoteForShell(projectPath)} && ${buildAgentInvocation(sessionId, provider)}`
 }
 
-function createTerminalLaunchScript(projectPath: string, sessionId: string | null): string {
-  const scriptsDir = join(tmpdir(), 'clui-open-in-cli')
+function createTerminalLaunchScript(projectPath: string, sessionId: string | null, provider: ProviderId = 'claude'): string {
+  const scriptsDir = join(tmpdir(), 'glui-open-in-cli')
   mkdirSync(scriptsDir, { recursive: true })
 
   const scriptPath = join(
@@ -393,7 +411,7 @@ function createTerminalLaunchScript(projectPath: string, sessionId: string | nul
   writeFileSync(scriptPath, [
     '#!/bin/zsh',
     `cd -- ${quoteForShell(projectPath)} || exit 1`,
-    buildClaudeInvocation(sessionId),
+    buildAgentInvocation(sessionId, provider),
     '',
   ].join('\n'))
   chmodSync(scriptPath, 0o755)
@@ -411,20 +429,20 @@ function openScriptInTerminal(scriptPath: string, appPath?: string): Promise<voi
   })
 }
 
-async function launchDefaultTerminal(sessionId: string | null, projectPath: string): Promise<void> {
-  const scriptPath = createTerminalLaunchScript(projectPath, sessionId)
+async function launchDefaultTerminal(sessionId: string | null, projectPath: string, provider: ProviderId = 'claude'): Promise<void> {
+  const scriptPath = createTerminalLaunchScript(projectPath, sessionId, provider)
   await openScriptInTerminal(scriptPath)
 }
 
-async function launchTerminal(terminal: InstalledTerminal, sessionId: string | null, projectPath: string): Promise<void> {
+async function launchTerminal(terminal: InstalledTerminal, sessionId: string | null, projectPath: string, provider: ProviderId = 'claude'): Promise<void> {
   if (terminal.launchStrategy === 'open-script') {
-    const scriptPath = createTerminalLaunchScript(projectPath, sessionId)
+    const scriptPath = createTerminalLaunchScript(projectPath, sessionId, provider)
     await openScriptInTerminal(scriptPath, terminal.appPath)
     return
   }
 
   if (terminal.launchStrategy === 'spawn-alacritty') {
-    const shellCommand = `${buildClaudeInvocation(sessionId)}; exec "\${SHELL:-/bin/zsh}" -l`
+    const shellCommand = `${buildAgentInvocation(sessionId, provider)}; exec "\${SHELL:-/bin/zsh}" -l`
     const child = spawn(terminal.execPath || 'alacritty', [
       '--working-directory',
       projectPath,
@@ -442,7 +460,11 @@ async function launchTerminal(terminal: InstalledTerminal, sessionId: string | n
   }
 }
 
-ipcMain.handle(IPC.SEARCH_SESSIONS, async (_e, query: string) => {
+ipcMain.handle(IPC.SEARCH_SESSIONS, async (_e, query: string, provider?: ProviderId) => {
+  if (requireProvider(provider) !== 'claude') {
+    const sessions = await listAgentSessions(provider!)
+    return sessions.filter(s => `${s.firstMessage} ${s.projectPath} ${s.slug}`.toLowerCase().includes(query.toLowerCase())).slice(0, 30).map(s => ({ ...s, score: 1, snippet: s.firstMessage || '', projectPath: s.projectPath || homedir() }))
+  }
   searchManager.ensureReady()
   return searchManager.search(query, 10)
 })
@@ -488,15 +510,15 @@ function scheduleToggleSnapshots(toggleId: number, phase: 'show' | 'hide'): void
 // ─── Wire ControlPlane events → renderer ───
 
 controlPlane.on('event', (tabId: string, event: NormalizedEvent) => {
-  broadcast('clui:normalized-event', tabId, event)
+  broadcast('glui:normalized-event', tabId, event)
 })
 
 controlPlane.on('tab-status-change', (tabId: string, newStatus: string, oldStatus: string) => {
-  broadcast('clui:tab-status-change', tabId, newStatus, oldStatus)
+  broadcast('glui:tab-status-change', tabId, newStatus, oldStatus)
 })
 
 controlPlane.on('error', (tabId: string, error: EnrichedError) => {
-  broadcast('clui:enriched-error', tabId, error)
+  broadcast('glui:enriched-error', tabId, error)
 })
 
 // ─── Window Creation ───
@@ -560,6 +582,7 @@ function createWindow(): void {
       mainWindow?.hide()
     }
   })
+  mainWindow.on('show', () => { if (mainWindow) refreshGlass(mainWindow) })
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -819,48 +842,24 @@ ipcMain.on(IPC.UPDATE_SNAP_ZONE, (_, zone: 'left' | 'center' | 'right') => {
   }
 })
 
+controlPlane.on('snapshot', (tabId, snapshot) => broadcast(IPC.THREAD_SNAPSHOT, tabId, snapshot))
+ipcMain.handle(IPC.ATTACH_THREAD, (_event, { tabId, sessionId }) => controlPlane.attach(tabId, sessionId))
+ipcMain.handle(IPC.FORK_THREAD, (_event, tabId: string) => controlPlane.fork(tabId))
+ipcMain.handle(IPC.WORKSPACE_HISTORY, (_event, provider?: ProviderId, projectPath?: string) => controlPlane.listSessions(provider, projectPath))
+ipcMain.handle(IPC.LOAD_EARLIER_HISTORY, (_event, tabId: string) => controlPlane.loadEarlierHistory(tabId))
+
 // ─── IPC Handlers (typed, strict) ───
 
-ipcMain.handle(IPC.START, async () => {
-  log('IPC START — fetching static CLI info')
-  const { execSync } = require('child_process')
-
-  let version = 'unknown'
-  try {
-    version = execSync('claude -v', { encoding: 'utf-8', timeout: 5000, env: getCliEnv() }).trim()
-  } catch {}
-
-  let auth: { email?: string; subscriptionType?: string; authMethod?: string } = {}
-  try {
-    const raw = execSync('claude auth status', { encoding: 'utf-8', timeout: 5000, env: getCliEnv() }).trim()
-    auth = JSON.parse(raw)
-  } catch {}
-
-  let mcpServers: string[] = []
-  try {
-    const raw = execSync('claude mcp list', { encoding: 'utf-8', timeout: 5000, env: getCliEnv() }).trim()
-    if (raw) mcpServers = raw.split('\n').filter(Boolean)
-  } catch {}
-
-  return {
-    version,
-    auth,
-    mcpServers,
-    projectPath: process.cwd(),
-    homePath: require('os').homedir(),
-    modelSettings: getClaudeModelSettings(),
-  }
-})
-
-ipcMain.handle(IPC.GET_MODEL_SETTINGS, async (_event, arg?: { projectPath?: string }) => {
-  return getClaudeModelSettings(arg?.projectPath)
-})
-
-ipcMain.handle(IPC.CREATE_TAB, () => {
-  const tabId = controlPlane.createTab()
-  log(`IPC CREATE_TAB → ${tabId}`)
-  return { tabId }
-})
+ipcMain.handle(IPC.START, async () => ({
+  version: app.getVersion(), auth: {}, mcpServers: [], projectPath: process.cwd(), homePath: homedir(),
+  modelSettings: getClaudeModelSettings(), providers: await listProviders(),
+}))
+ipcMain.handle(IPC.LIST_PROVIDERS, () => listProviders())
+ipcMain.handle(IPC.SET_PROVIDER, (_event, { tabId, provider }) => controlPlane.setProvider(tabId, requireProvider(provider)))
+ipcMain.handle(IPC.RESPOND_INPUT, (_event, { tabId, questionId, answers }) => controlPlane.respondToInput(tabId, questionId, answers))
+ipcMain.handle(IPC.WORKSPACE_INFO, (_event, directory: string) => getWorkspaceInfo(directory))
+ipcMain.handle(IPC.GET_MODEL_SETTINGS, (_event, arg?: { projectPath?: string; provider?: ProviderId }) => controlPlane.getModels(requireProvider(arg?.provider)))
+ipcMain.handle(IPC.CREATE_TAB, (_event, provider?: ProviderId) => ({ tabId: controlPlane.createTab(requireProvider(provider)) }))
 
 ipcMain.on(IPC.INIT_SESSION, (_event, tabId: string) => {
   log(`IPC INIT_SESSION: ${tabId}`)
@@ -896,46 +895,10 @@ ipcMain.handle(IPC.PROMPT, async (_event, { tabId, requestId, options }: { tabId
 })
 
 ipcMain.handle(IPC.BTW_PROMPT, async (_event, opts: BtwOptions) => {
-  log(`IPC BTW_PROMPT: btwId=${opts.btwId}`)
-
-  const BTW_SYSTEM_PROMPT = [
-    '<system-reminder>',
-    'This is a lightweight side question. Keep your answer concise.',
-    'You may use tools if truly needed, but use no more than 3 tool calls total.',
-    'Prefer answering from existing knowledge over reaching for tools.',
-    '</system-reminder>',
-  ].join(' ')
-
-  // Use a temp directory so the btw session isn't saved
-  // alongside the user's real project sessions.
-  const { mkdtempSync, rmSync } = require('fs')
-  const { tmpdir } = require('os')
-  const btwDir = mkdtempSync(join(tmpdir(), 'clui-btw-'))
-
-  const cleanupBtwDir = () => {
-    try { rmSync(btwDir, { recursive: true, force: true }) } catch {}
-    // Also remove the Claude session transcript dir that gets created under
-    // ~/.claude/projects/<encoded-btwDir>/ — these are ephemeral and would
-    // accumulate indefinitely otherwise.
-    try {
-      const encodedBtwDir = encodeProjectPath(btwDir)
-      const claudeSessionDir = join(homedir(), '.claude', 'projects', encodedBtwDir)
-      rmSync(claudeSessionDir, { recursive: true, force: true })
-    } catch {}
-  }
-
-  controlPlane.startBtwRun(
-    opts.btwId,
-    {
-      prompt: opts.question,
-      projectPath: btwDir,
-      maxTurns: 5,
-      systemPrompt: BTW_SYSTEM_PROMPT,
-    },
-    (text) => broadcast(IPC.BTW_EVENT, { btwId: opts.btwId, type: 'chunk', text }),
-    ()     => { broadcast(IPC.BTW_EVENT, { btwId: opts.btwId, type: 'done' }); cleanupBtwDir() },
-    (msg)  => { broadcast(IPC.BTW_EVENT, { btwId: opts.btwId, type: 'error', errorMessage: msg }); cleanupBtwDir() },
-  )
+  controlPlane.startBtwRun(opts.btwId, { provider: opts.provider, model: opts.model, modelOptions: opts.modelOptions, runtimeMode: opts.runtimeMode, projectPath: opts.projectPath, prompt: opts.question },
+    text => broadcast(IPC.BTW_EVENT, { btwId: opts.btwId, type: 'chunk', text }),
+    () => broadcast(IPC.BTW_EVENT, { btwId: opts.btwId, type: 'done' }),
+    errorMessage => broadcast(IPC.BTW_EVENT, { btwId: opts.btwId, type: 'error', errorMessage }))
 })
 
 ipcMain.handle(IPC.CANCEL, (_event, requestId: string) => {
@@ -1114,7 +1077,8 @@ function extractSessionFirstMessage(obj: any): string | null {
   return text.substring(0, 100)
 }
 
-ipcMain.handle(IPC.LIST_SESSIONS, async (_e, projectPath?: string) => {
+ipcMain.handle(IPC.LIST_SESSIONS, async (_e, projectPath?: string, provider?: ProviderId) => {
+  if (requireProvider(provider) !== 'claude') return listAgentSessions(provider!, projectPath)
   log(`IPC LIST_SESSIONS ${projectPath ? `(path=${projectPath})` : ''}`)
   try {
     const cwd = projectPath || process.cwd()
@@ -1189,7 +1153,8 @@ ipcMain.handle(IPC.LIST_SESSIONS, async (_e, projectPath?: string) => {
 })
 
 // List sessions across ALL project directories
-ipcMain.handle(IPC.LIST_ALL_SESSIONS, async () => {
+ipcMain.handle(IPC.LIST_ALL_SESSIONS, async (_e, provider?: ProviderId) => {
+  if (requireProvider(provider) !== 'claude') return listAgentSessions(provider!)
   log('IPC LIST_ALL_SESSIONS')
   try {
     const projectsRoot = join(homedir(), '.claude', 'projects')
@@ -1200,7 +1165,7 @@ ipcMain.handle(IPC.LIST_ALL_SESSIONS, async () => {
 
     const projectDirs = readdirSync(projectsRoot).filter((d: string) => {
       try {
-        if (d.includes('clui-btw-')) return false // skip btw ephemeral sessions
+        if (d.includes('glui-btw-')) return false // skip btw ephemeral sessions
         return statSync(join(projectsRoot, d)).isDirectory()
       } catch { return false }
     })
@@ -1270,7 +1235,8 @@ ipcMain.handle(IPC.LIST_ALL_SESSIONS, async () => {
 })
 
 // Load conversation history from a session's JSONL file
-ipcMain.handle(IPC.LOAD_SESSION, async (_e, arg: { sessionId: string; projectPath?: string } | string) => {
+ipcMain.handle(IPC.LOAD_SESSION, async (_e, arg: { sessionId: string; projectPath?: string; provider?: ProviderId } | string) => {
+  if (typeof arg !== 'string' && requireProvider(arg.provider) !== 'claude') return loadAgentSession(arg.provider!, arg.sessionId, arg.projectPath)
   const sessionId = typeof arg === 'string' ? arg : arg.sessionId
   const projectPath = typeof arg === 'string' ? undefined : arg.projectPath
   log(`IPC LOAD_SESSION ${sessionId}${projectPath ? ` (path=${projectPath})` : ''}`)
@@ -1390,7 +1356,8 @@ ipcMain.handle(IPC.LOAD_SESSION, async (_e, arg: { sessionId: string; projectPat
 // Extract tool results from a session JSONL file
 // Returns a map of toolUseId → result text
 // Sources: tool_result blocks in user messages + progress events for subagent activity
-ipcMain.handle(IPC.GET_TOOL_RESULTS, async (_e, arg: { sessionId: string; projectPath: string }) => {
+ipcMain.handle(IPC.GET_TOOL_RESULTS, async (_e, arg: { sessionId: string; projectPath: string; provider?: ProviderId }) => {
+  if (requireProvider(arg.provider) !== 'claude') return {}
   const { sessionId, projectPath } = arg
   log(`IPC GET_TOOL_RESULTS ${sessionId}`)
   try {
@@ -1479,8 +1446,11 @@ ipcMain.handle(IPC.GET_TOOL_RESULTS, async (_e, arg: { sessionId: string; projec
 // events, reads memory/CLAUDE.md files from disk, estimates tokens via charLength/4
 // (same fallback the CLI uses when the countTokens API is unavailable).
 
-ipcMain.handle(IPC.GET_CONTEXT, async (_e, arg: { sessionId: string; projectPath: string; sessionData?: any }) => {
-  const { sessionId, projectPath, sessionData } = arg
+ipcMain.handle(IPC.GET_CONTEXT, async (_e, arg: { sessionId: string; projectPath: string; sessionData?: any; provider?: ProviderId }) => {
+  if (requireProvider(arg.provider) !== 'claude') return { unavailable: true }
+  const { projectPath, sessionData } = arg
+  const sessionId = controlPlane.nativeSessionId(arg.sessionId)
+  if (!sessionId) return null
   log(`IPC GET_CONTEXT session=${sessionId} path=${projectPath}`)
 
   // Fix #1: Validate sessionId is a UUID to prevent path traversal
@@ -1774,9 +1744,9 @@ ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
   if (!mainWindow) return null
   // macOS: activate app so unparented dialog appears on top (not behind other apps).
   // Unparented avoids modal dimming on the transparent overlay.
-  // Activation is fine here — user is actively interacting with Clui.
+  // Activation is fine here — user is actively interacting with GLUI.
   if (process.platform === 'darwin') app.focus()
-  const options = { properties: ['openDirectory'] as const }
+  const options: Electron.OpenDialogOptions = { properties: ['openDirectory'] }
   const result = process.platform === 'darwin'
     ? await dialog.showOpenDialog(options)
     : await dialog.showOpenDialog(mainWindow, options)
@@ -1798,7 +1768,7 @@ ipcMain.handle(IPC.ATTACH_FILES, async () => {
   if (!mainWindow) return null
   // macOS: activate app so unparented dialog appears on top
   if (process.platform === 'darwin') app.focus()
-  const options = {
+  const options: Electron.OpenDialogOptions = {
     properties: ['openFile', 'multiSelections'],
     filters: [
       { name: 'All Files', extensions: ['*'] },
@@ -1862,7 +1832,7 @@ ipcMain.handle(IPC.TAKE_SCREENSHOT, async () => {
     const { readFileSync, existsSync } = require('fs')
 
     const timestamp = Date.now()
-    const screenshotPath = join(tmpdir(), `clui-screenshot-${timestamp}.png`)
+    const screenshotPath = join(tmpdir(), `glui-screenshot-${timestamp}.png`)
 
     execSync(`/usr/sbin/screencapture -i "${screenshotPath}"`, {
       timeout: 30000,
@@ -1914,7 +1884,7 @@ ipcMain.handle(IPC.PASTE_IMAGE, async (_event, dataUrl: string) => {
     const [, mimeType, ext, base64Data] = match
     const buf = Buffer.from(base64Data, 'base64')
     const timestamp = Date.now()
-    const filePath = join(tmpdir(), `clui-paste-${timestamp}.${ext}`)
+    const filePath = join(tmpdir(), `glui-paste-${timestamp}.${ext}`)
     writeFileSync(filePath, buf)
 
     return {
@@ -1937,7 +1907,7 @@ ipcMain.handle(IPC.TRANSCRIBE_AUDIO, async (_event, audioBase64: string) => {
   const { join } = require('path')
   const { tmpdir } = require('os')
 
-  const tmpWav = join(tmpdir(), `clui-voice-${Date.now()}.wav`)
+  const tmpWav = join(tmpdir(), `glui-voice-${Date.now()}.wav`)
   try {
     const buf = Buffer.from(audioBase64, 'base64')
     writeFileSync(tmpWav, buf)
@@ -2168,9 +2138,10 @@ ipcMain.handle(IPC.LIST_INSTALLED_TERMINALS, async () => {
   return (await getInstalledTerminals()).map(({ id, label }) => ({ id, label }))
 })
 
-ipcMain.handle(IPC.OPEN_IN_TERMINAL, async (_event, arg: string | null | { sessionId?: string | null; projectPath?: string; terminalId?: PreferredTerminalId | TerminalId | null }) => {
+ipcMain.handle(IPC.OPEN_IN_TERMINAL, async (_event, arg: string | null | { sessionId?: string | null; projectPath?: string; terminalId?: PreferredTerminalId | TerminalId | null; provider?: ProviderId }) => {
 
   // Support both old (string) and new ({ sessionId, projectPath }) calling convention
+  const provider = requireProvider(typeof arg === 'object' && arg ? arg.provider : undefined)
   let sessionId: string | null = null
   let projectPath: string = homedir()
   let terminalId: PreferredTerminalId | TerminalId | null = null
@@ -2182,16 +2153,17 @@ ipcMain.handle(IPC.OPEN_IN_TERMINAL, async (_event, arg: string | null | { sessi
     terminalId = arg.terminalId ?? null
   }
 
+  sessionId = controlPlane.nativeSessionId(sessionId)
   const terminal = await findInstalledTerminal(terminalId)
   const logLabel = terminal ? terminal.label : terminalId && terminalId !== 'auto' ? `macOS default (fallback from ${terminalId})` : 'macOS default'
 
   try {
     if (terminal) {
-      await launchTerminal(terminal, sessionId, projectPath)
+      await launchTerminal(terminal, sessionId, projectPath, provider)
     } else {
-      await launchDefaultTerminal(sessionId, projectPath)
+      await launchDefaultTerminal(sessionId, projectPath, provider)
     }
-    log(`Opened terminal with ${logLabel}: ${buildClaudeShellCommand(projectPath, sessionId)}`)
+    log(`Opened terminal with ${logLabel}: ${buildAgentShellCommand(projectPath, sessionId, provider)}`)
     return true
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
@@ -2226,6 +2198,10 @@ ipcMain.handle(IPC.MARKETPLACE_UNINSTALL, async (_event, { pluginName }: { plugi
 
 ipcMain.handle(IPC.GET_THEME, () => {
   return { isDark: nativeTheme.shouldUseDarkColors }
+})
+
+ipcMain.handle(IPC.UPDATE_GLASS, (event, update) => {
+  return mainWindow && event.sender === mainWindow.webContents ? updateGlass(mainWindow, update) : false
 })
 
 nativeTheme.on('updated', () => {
@@ -2267,8 +2243,8 @@ app.whenReady().then(async () => {
   }
 
   // Register custom protocol for serving local file thumbnails to the renderer.
-  // Usage: <img src="clui-local:///path/to/image.png" />
-  protocol.handle('clui-local', (request) => {
+  // Usage: <img src="glui-local:///path/to/image.png" />
+  protocol.handle('glui-local', (request) => {
     const filePath = decodeURIComponent(new URL(request.url).pathname)
     return net.fetch(`file://${filePath}`)
   })
@@ -2277,7 +2253,7 @@ app.whenReady().then(async () => {
   await requestPermissions()
 
   // Skill provisioning — non-blocking, streams status to renderer
-  ensureSkills((status: SkillStatus) => {
+  if (!process.env.GLUI_TEST) ensureSkills((status: SkillStatus) => {
     log(`Skill ${status.name}: ${status.state}${status.error ? ` — ${status.error}` : ''}`)
     broadcast(IPC.SKILL_STATUS, status)
   }).catch((err: Error) => log(`Skill provisioning error: ${err.message}`))
@@ -2289,6 +2265,7 @@ app.whenReady().then(async () => {
 
   createWindow()
   snapshotWindowState('after createWindow')
+  try { controlPlane.start() } catch (error) { log(`Workspace startup failed: ${String(error)}`) }
 
   if (SPACES_DEBUG) {
     mainWindow?.on('show', () => snapshotWindowState('event window show'))
@@ -2328,7 +2305,7 @@ app.whenReady().then(async () => {
   const trayIcon = nativeImage.createFromPath(trayIconPath)
   trayIcon.setTemplateImage(true)
   tray = new Tray(trayIcon)
-  tray.setToolTip('Clui — Claude Code UI')
+  tray.setToolTip('GLUI — Glue UI for your coding agents')
   tray.on('click', () => toggleWindow('tray click'))
 
   let pendingUpdateVersion: string | null = null
@@ -2336,7 +2313,7 @@ app.whenReady().then(async () => {
   function rebuildTrayMenu(): void {
     if (!tray) return
     const items: Electron.MenuItemConstructorOptions[] = [
-      { label: 'Show Clui', click: () => showWindow('tray menu') },
+      { label: 'Show GLUI', click: () => showWindow('tray menu') },
     ]
     if (pendingUpdateVersion) {
       items.push({
@@ -2372,7 +2349,14 @@ app.whenReady().then(async () => {
     broadcast(IPC.UPDATE_ERROR, { message: err.message })
   })
 
-  ipcMain.handle(IPC.CHECK_FOR_UPDATE, () => autoUpdater.checkForUpdates())
+  const hasUpdateFeed = app.isPackaged && !process.env.GLUI_TEST && existsSync(join(process.resourcesPath, 'app-update.yml'))
+  ipcMain.handle(IPC.CHECK_FOR_UPDATE, () => {
+    if (!hasUpdateFeed) {
+      broadcast(IPC.UPDATE_ERROR, { message: 'This local build has no update feed. Install a release build to receive automatic updates.' })
+      return null
+    }
+    return autoUpdater.checkForUpdates()
+  })
   ipcMain.handle(IPC.INSTALL_UPDATE, () => {
     // Defer quitAndInstall so the IPC response is sent before the app quits.
     // Calling it synchronously inside handle() deadlocks: the renderer awaits
@@ -2383,11 +2367,13 @@ app.whenReady().then(async () => {
     })
   })
 
-  // Initial check + periodic check every 30 minutes
-  autoUpdater.checkForUpdates().catch((err: Error) => log(`[updater] initial check failed: ${err.message}`))
-  setInterval(() => {
-    autoUpdater.checkForUpdates().catch((err: Error) => log(`[updater] periodic check failed: ${err.message}`))
-  }, 30 * 60 * 1000)
+  // Local directory builds and isolated QA do not have a release update feed.
+  if (hasUpdateFeed) {
+    autoUpdater.checkForUpdates().catch((err: Error) => log(`[updater] initial check failed: ${err.message}`))
+    setInterval(() => {
+      autoUpdater.checkForUpdates().catch((err: Error) => log(`[updater] periodic check failed: ${err.message}`))
+    }, 30 * 60 * 1000)
+  }
 
   // app 'activate' fires when macOS brings the app to the foreground (e.g. after
   // webContents.focus() triggers applicationDidBecomeActive on some macOS versions).

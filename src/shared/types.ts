@@ -1,3 +1,5 @@
+import type { PillContextChange, PillMessage, PillModelOptions, PillRuntimeMode } from "../../orchestrator/packages/shared/src/gluiPill"
+import type { ProviderId } from './providers'
 // ─── Claude Code Stream Event Types (verified from v2.1.63) ───
 
 export interface BaseSystemEvent {
@@ -209,17 +211,25 @@ export interface Attachment {
 }
 
 export interface TabState {
+  provider: ProviderId
+  preferredModel: string | null
+  modelOptions?: PillModelOptions
+  runtimeMode?: PillRuntimeMode
   id: string
-  claudeSessionId: string | null
+  providerSessionId: string | null
   status: TabStatus
   activeRequestId: string | null
   hasUnread: boolean
   currentActivity: string
   permissionQueue: PermissionRequest[]
+  inputRequests: Array<Extract<NormalizedEvent, { type: 'user_input' }>>
   /** Fallback card when tools were denied and no interactive permission is available */
   permissionDenied: { tools: Array<{ toolName: string; toolUseId: string }> } | null
   attachments: Attachment[]
   messages: Message[]
+  hasMoreHistory: boolean
+  historyLoading: boolean
+  historyError: string | null
   title: string
   /** Last run's result data (cost, tokens, duration) */
   lastResult: RunResult | null
@@ -259,10 +269,14 @@ export interface Message {
   timestamp: number
   /** Attachments sent with this user message (images / files) */
   attachments?: Attachment[]
+  contextChange?: PillContextChange
+  toolKind?: PillMessage['toolKind']
+  toolState?: string
+  sources?: PillMessage['sources']
 }
 
 export interface RunResult {
-  totalCostUsd: number
+  totalCostUsd: number | null
   durationMs: number
   numTurns: number
   usage: UsageData
@@ -298,11 +312,13 @@ export type NormalizedEvent =
   | { type: 'compact_boundary'; sessionId?: string | null; summary?: string; trigger?: string; compactedMessages?: number }
   | { type: 'text_chunk'; text: string; parentToolUseId?: string | null }
   | { type: 'tool_call'; toolName: string; toolId: string; index: number; parentToolUseId?: string | null }
-  | { type: 'tool_call_update'; toolId: string; partialInput: string; parentToolUseId?: string | null }
+  | { type: 'tool_call_update'; toolId: string; partialInput: string; replace?: boolean; parentToolUseId?: string | null }
+  | { type: 'tool_result'; toolId: string; result: string; isError?: boolean }
+  | { type: 'user_input'; questionId: string; questions: Array<{ id: string; question: string; options?: Array<{ label: string; description?: string }>; multiple?: boolean; isSecret?: boolean }> }
   | { type: 'tool_call_complete'; index: number; parentToolUseId?: string | null }
   | { type: 'agent_progress'; toolUseId: string; content: string }
   | { type: 'task_update'; message: AssistantMessagePayload }
-  | { type: 'task_complete'; result: string; costUsd: number; durationMs: number; numTurns: number; usage: UsageData; sessionId: string; permissionDenials?: Array<{ toolName: string; toolUseId: string }> }
+  | { type: 'task_complete'; result: string; costUsd: number | null; durationMs: number; numTurns: number; usage: UsageData; sessionId: string; permissionDenials?: Array<{ toolName: string; toolUseId: string }> }
   | { type: 'error'; message: string; isError: boolean; sessionId?: string }
   | { type: 'session_dead'; exitCode: number | null; signal: string | null; stderrTail: string[] }
   | { type: 'rate_limit'; status: string; resetsAt: number; rateLimitType: string }
@@ -312,6 +328,10 @@ export type NormalizedEvent =
 // ─── BTW Side Question ───
 
 export interface BtwOptions {
+  modelOptions?: PillModelOptions
+  runtimeMode?: PillRuntimeMode
+  provider?: ProviderId
+  model?: string
   btwId: string
   question: string
   projectPath: string
@@ -327,6 +347,11 @@ export interface BtwEvent {
 // ─── Run Options ───
 
 export interface RunOptions {
+  modelOptions?: PillModelOptions
+  runtimeMode?: PillRuntimeMode
+  provider?: ProviderId
+  permissionMode?: 'ask' | 'auto'
+  attachments?: Attachment[]
   prompt: string
   projectPath: string
   sessionId?: string
@@ -335,7 +360,7 @@ export interface RunOptions {
   maxBudgetUsd?: number
   systemPrompt?: string
   model?: string
-  /** Path to Clui-scoped settings file with hook config (passed via --settings) */
+  /** Path to GLUI-scoped settings file with hook config (passed via --settings) */
   hookSettingsPath?: string
   /** Extra directories to add via --add-dir (session-preserving) */
   addDirs?: string[]
@@ -344,8 +369,9 @@ export interface RunOptions {
 // ─── Control Plane Types ───
 
 export interface TabRegistryEntry {
+  provider: ProviderId
   tabId: string
-  claudeSessionId: string | null
+  providerSessionId: string | null
   status: TabStatus
   activeRequestId: string | null
   runPid: number | null
@@ -359,7 +385,7 @@ export interface HealthReport {
     tabId: string
     status: TabStatus
     activeRequestId: string | null
-    claudeSessionId: string | null
+    providerSessionId: string | null
     alive: boolean
   }>
   queueDepth: number
@@ -379,6 +405,7 @@ export interface EnrichedError {
 // ─── Search ───
 
 export interface SearchResult {
+  provider?: ProviderId
   sessionId: string
   projectPath: string
   score: number
@@ -399,6 +426,7 @@ export interface SearchIndexStatus {
 // ─── Session History ───
 
 export interface SessionMeta {
+  provider?: ProviderId
   sessionId: string
   slug: string | null
   firstMessage: string | null
@@ -419,9 +447,12 @@ export interface SessionLoadMessage {
 
 // ─── Marketplace / Plugin Types ───
 
-export type PluginStatus = 'not_installed' | 'checking' | 'installing' | 'installed' | 'failed'
+export type PluginStatus = 'not_installed' | 'checking' | 'removing' | 'installing' | 'installed' | 'failed'
 
 export interface CatalogPlugin {
+  installedProviders?: string[]
+  managed?: boolean
+  revision?: string
   id: string              // unique: `${repo}/${skillPath}` e.g. 'anthropics/skills/skills/xlsx'
   name: string            // from SKILL.md or plugin.json
   description: string     // from SKILL.md or plugin.json
@@ -446,99 +477,109 @@ export const OVERLAY_PILL_BOTTOM_MARGIN = 24
 // ─── IPC Channel Names ───
 
 export const IPC = {
+  WORKSPACE_INFO: 'glui:workspace-info',
+  THREAD_SNAPSHOT: 'glui:thread-snapshot',
+  ATTACH_THREAD: 'glui:attach-thread',
+  FORK_THREAD: 'glui:fork-thread',
+  WORKSPACE_HISTORY: 'glui:workspace-history',
+  LOAD_EARLIER_HISTORY: 'glui:load-earlier-history',
+  LIST_PROVIDERS: 'glui:list-providers',
+  SET_PROVIDER: 'glui:set-provider',
+  RESPOND_INPUT: 'glui:respond-input',
   // Request-response (renderer → main)
-  START: 'clui:start',
-  CREATE_TAB: 'clui:create-tab',
-  PROMPT: 'clui:prompt',
-  CANCEL: 'clui:cancel',
-  STOP_TAB: 'clui:stop-tab',
-  RETRY: 'clui:retry',
-  STATUS: 'clui:status',
-  TAB_HEALTH: 'clui:tab-health',
-  CLOSE_TAB: 'clui:close-tab',
-  SELECT_DIRECTORY: 'clui:select-directory',
-  OPEN_EXTERNAL: 'clui:open-external',
-  OPEN_IN_TERMINAL: 'clui:open-in-terminal',
-  LIST_INSTALLED_TERMINALS: 'clui:list-installed-terminals',
-  ATTACH_FILES: 'clui:attach-files',
-  TAKE_SCREENSHOT: 'clui:take-screenshot',
-  TRANSCRIBE_AUDIO: 'clui:transcribe-audio',
-  PASTE_IMAGE: 'clui:paste-image',
-  GET_DIAGNOSTICS: 'clui:get-diagnostics',
-  RESPOND_PERMISSION: 'clui:respond-permission',
-  INIT_SESSION: 'clui:init-session',
-  RESET_TAB_SESSION: 'clui:reset-tab-session',
-  ANIMATE_HEIGHT: 'clui:animate-height',
-  LIST_SESSIONS: 'clui:list-sessions',
-  LIST_ALL_SESSIONS: 'clui:list-all-sessions',
-  LOAD_SESSION: 'clui:load-session',
-  GET_TOOL_RESULTS: 'clui:get-tool-results',
-  GET_CONTEXT: 'clui:get-context',
-  GET_MODEL_SETTINGS: 'clui:get-model-settings',
-  LIST_DIR: 'clui:list-dir',
+  START: 'glui:start',
+  CREATE_TAB: 'glui:create-tab',
+  PROMPT: 'glui:prompt',
+  CANCEL: 'glui:cancel',
+  STOP_TAB: 'glui:stop-tab',
+  RETRY: 'glui:retry',
+  STATUS: 'glui:status',
+  TAB_HEALTH: 'glui:tab-health',
+  CLOSE_TAB: 'glui:close-tab',
+  SELECT_DIRECTORY: 'glui:select-directory',
+  OPEN_EXTERNAL: 'glui:open-external',
+  OPEN_IN_TERMINAL: 'glui:open-in-terminal',
+  LIST_INSTALLED_TERMINALS: 'glui:list-installed-terminals',
+  ATTACH_FILES: 'glui:attach-files',
+  TAKE_SCREENSHOT: 'glui:take-screenshot',
+  TRANSCRIBE_AUDIO: 'glui:transcribe-audio',
+  PASTE_IMAGE: 'glui:paste-image',
+  GET_DIAGNOSTICS: 'glui:get-diagnostics',
+  RESPOND_PERMISSION: 'glui:respond-permission',
+  INIT_SESSION: 'glui:init-session',
+  RESET_TAB_SESSION: 'glui:reset-tab-session',
+  ANIMATE_HEIGHT: 'glui:animate-height',
+  LIST_SESSIONS: 'glui:list-sessions',
+  LIST_ALL_SESSIONS: 'glui:list-all-sessions',
+  LOAD_SESSION: 'glui:load-session',
+  GET_TOOL_RESULTS: 'glui:get-tool-results',
+  GET_CONTEXT: 'glui:get-context',
+  GET_MODEL_SETTINGS: 'glui:get-model-settings',
+  LIST_DIR: 'glui:list-dir',
 
   // One-way events (main → renderer)
-  TEXT_CHUNK: 'clui:text-chunk',
-  TOOL_CALL: 'clui:tool-call',
-  TOOL_CALL_UPDATE: 'clui:tool-call-update',
-  TOOL_CALL_COMPLETE: 'clui:tool-call-complete',
-  TASK_UPDATE: 'clui:task-update',
-  TASK_COMPLETE: 'clui:task-complete',
-  SESSION_DEAD: 'clui:session-dead',
-  SESSION_INIT: 'clui:session-init',
-  ERROR: 'clui:error',
-  RATE_LIMIT: 'clui:rate-limit',
+  TEXT_CHUNK: 'glui:text-chunk',
+  TOOL_CALL: 'glui:tool-call',
+  TOOL_CALL_UPDATE: 'glui:tool-call-update',
+  TOOL_CALL_COMPLETE: 'glui:tool-call-complete',
+  TASK_UPDATE: 'glui:task-update',
+  TASK_COMPLETE: 'glui:task-complete',
+  SESSION_DEAD: 'glui:session-dead',
+  SESSION_INIT: 'glui:session-init',
+  ERROR: 'glui:error',
+  RATE_LIMIT: 'glui:rate-limit',
 
   // Window management
-  RESIZE_HEIGHT: 'clui:resize-height',
-  SET_WINDOW_WIDTH: 'clui:set-window-width',
-  HIDE_WINDOW: 'clui:hide-window',
-  WINDOW_SHOWN: 'clui:window-shown',
-  SET_IGNORE_MOUSE_EVENTS: 'clui:set-ignore-mouse-events',
-  START_WINDOW_DRAG: 'clui:start-window-drag',
-  RESET_WINDOW_POSITION: 'clui:reset-window-position',
-  SHOW_SNAP_GRID: 'clui:show-snap-grid',
-  HIDE_SNAP_GRID: 'clui:hide-snap-grid',
-  UPDATE_SNAP_ZONE: 'clui:update-snap-zone',
-  IS_VISIBLE: 'clui:is-visible',
+  RESIZE_HEIGHT: 'glui:resize-height',
+  SET_WINDOW_WIDTH: 'glui:set-window-width',
+  HIDE_WINDOW: 'glui:hide-window',
+  WINDOW_SHOWN: 'glui:window-shown',
+  SET_IGNORE_MOUSE_EVENTS: 'glui:set-ignore-mouse-events',
+  START_WINDOW_DRAG: 'glui:start-window-drag',
+  RESET_WINDOW_POSITION: 'glui:reset-window-position',
+  SHOW_SNAP_GRID: 'glui:show-snap-grid',
+  HIDE_SNAP_GRID: 'glui:hide-snap-grid',
+  UPDATE_SNAP_ZONE: 'glui:update-snap-zone',
+  IS_VISIBLE: 'glui:is-visible',
 
   // Skill provisioning (main → renderer)
-  SKILL_STATUS: 'clui:skill-status',
+  SKILL_STATUS: 'glui:skill-status',
 
   // Theme
-  GET_THEME: 'clui:get-theme',
-  THEME_CHANGED: 'clui:theme-changed',
+  GET_THEME: 'glui:get-theme',
+  UPDATE_GLASS: 'glui:update-glass',
+  THEME_CHANGED: 'glui:theme-changed',
 
   // Whisper setup
-  FIX_WHISPER: 'clui:fix-whisper',
+  FIX_WHISPER: 'glui:fix-whisper',
 
   // Marketplace
-  MARKETPLACE_FETCH: 'clui:marketplace-fetch',
-  MARKETPLACE_INSTALLED: 'clui:marketplace-installed',
-  MARKETPLACE_INSTALL: 'clui:marketplace-install',
-  MARKETPLACE_UNINSTALL: 'clui:marketplace-uninstall',
+  MARKETPLACE_FETCH: 'glui:marketplace-fetch',
+  MARKETPLACE_INSTALLED: 'glui:marketplace-installed',
+  MARKETPLACE_INSTALL: 'glui:marketplace-install',
+  MARKETPLACE_UNINSTALL: 'glui:marketplace-uninstall',
 
   // Search
-  SEARCH_SESSIONS: 'clui:search-sessions',
-  SEARCH_BUILD_INDEX: 'clui:search-build-index',
-  SEARCH_INDEX_STATUS: 'clui:search-index-status',
+  SEARCH_SESSIONS: 'glui:search-sessions',
+  SEARCH_BUILD_INDEX: 'glui:search-build-index',
+  SEARCH_INDEX_STATUS: 'glui:search-index-status',
 
   // BTW side question
-  BTW_PROMPT: 'clui:btw-prompt',
-  BTW_EVENT: 'clui:btw-event',
+  BTW_PROMPT: 'glui:btw-prompt',
+  BTW_EVENT: 'glui:btw-event',
 
   // Permission mode
-  SET_PERMISSION_MODE: 'clui:set-permission-mode',
+  SET_PERMISSION_MODE: 'glui:set-permission-mode',
 
   // Auto-update
-  CHECK_FOR_UPDATE: 'clui:check-for-update',
-  INSTALL_UPDATE: 'clui:install-update',
-  UPDATE_AVAILABLE: 'clui:update-available',
-  UPDATE_DOWNLOADED: 'clui:update-downloaded',
-  UPDATE_ERROR: 'clui:update-error',
+  CHECK_FOR_UPDATE: 'glui:check-for-update',
+  INSTALL_UPDATE: 'glui:install-update',
+  UPDATE_AVAILABLE: 'glui:update-available',
+  UPDATE_DOWNLOADED: 'glui:update-downloaded',
+  UPDATE_ERROR: 'glui:update-error',
 
   // Legacy (kept for backward compat during migration)
-  STREAM_EVENT: 'clui:stream-event',
-  RUN_COMPLETE: 'clui:run-complete',
-  RUN_ERROR: 'clui:run-error',
+  STREAM_EVENT: 'glui:stream-event',
+  RUN_COMPLETE: 'glui:run-complete',
+  RUN_ERROR: 'glui:run-error',
 } as const

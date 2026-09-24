@@ -1,3 +1,4 @@
+import { PROVIDERS } from '../../shared/providers'
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useImperativeHandle, forwardRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Microphone, ArrowUp, SpinnerGap, X, Check, Wrench, CheckCircle, FolderSimple } from '@phosphor-icons/react'
@@ -209,7 +210,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
   const setPreferredModel = useSessionStore((s) => s.setPreferredModel)
   const staticInfo = useSessionStore((s) => s.staticInfo)
   const modelSettings = useSessionStore((s) => s.modelSettings)
-  const preferredModel = useSessionStore((s) => s.preferredModel)
+  const preferredModel = useSessionStore((s) => s.tabs.find(t => t.id === s.activeTabId)?.preferredModel ?? null)
   const activeTabId = useSessionStore((s) => s.activeTabId)
   const tab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId))
   const colors = useColors()
@@ -252,7 +253,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
   // and when the already-visible window regains focus after an external app
   // temporarily steals it (for example a clipboard manager).
   useEffect(() => {
-    const unsub = window.clui.onWindowShown(() => {
+    const unsub = window.glui.onWindowShown(() => {
       requestAnimationFrame(() => focusTextareaIfAppropriate())
     })
     const handleWindowFocus = () => {
@@ -458,6 +459,10 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
 
   // ─── Handle slash commands ───
   const executeCommand = useCallback((cmd: SlashCommand) => {
+    if (tab?.provider !== 'claude' && ['/compact', '/mcp', '/skills', '/context'].includes(cmd.command)) {
+      addSystemMessage(`${cmd.command} is available in ${PROVIDERS[tab?.provider || 'claude'].name}’s terminal. Use Open in terminal to manage native agent settings.`)
+      return
+    }
     switch (cmd.command) {
       case '/clear':
         clearTab()
@@ -491,7 +496,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
           const detail = m.detail ? ` -> ${m.detail}` : ''
           return `  ${active ? '\u25CF' : '\u25CB'} ${m.label} (${m.id ?? 'default'})${detail}`
         })
-        const header = version ? `Claude Code ${version}` : 'Claude Code'
+        const header = `${PROVIDERS[tab?.provider || 'claude'].name}${version ? ` · ${version}` : ''}`
         addSystemMessage(`${header}\n\n${lines.join('\n')}\n\nSwitch model: type /model <alias-or-id>\n  e.g. /model sonnet`)
         break
       }
@@ -502,7 +507,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
             return `  ${icon} ${s.name} — ${s.status}`
           })
           addSystemMessage(`MCP Servers (${tab.sessionMcpServers.length}):\n${lines.join('\n')}`)
-        } else if (tab?.claudeSessionId) {
+        } else if (tab?.providerSessionId) {
           addSystemMessage('No MCP servers connected in this session.')
         } else {
           addSystemMessage('No MCP data yet — send a message to start a session.')
@@ -513,7 +518,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
         if (tab?.sessionSkills && tab.sessionSkills.length > 0) {
           const lines = tab.sessionSkills.map((s) => `/${s}`)
           addSystemMessage(`Available skills (${tab.sessionSkills.length}):\n${lines.join('\n')}`)
-        } else if (tab?.claudeSessionId) {
+        } else if (tab?.providerSessionId) {
           addSystemMessage('No skills available in this session.')
         } else {
           addSystemMessage('No session metadata yet — send a message first.')
@@ -521,7 +526,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
         break
       }
       case '/context': {
-        if (!tab?.claudeSessionId) {
+        if (!tab?.providerSessionId) {
           addSystemMessage('No session active yet — send a message first.')
           break
         }
@@ -532,7 +537,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
         const originTabId = tab.id
 
         const sessionData = {
-          sessionId: tab.claudeSessionId,
+          sessionId: tab.providerSessionId,
           projectPath: tab.workingDirectory,
           model: tab.sessionModel,
           tools: tab.sessionTools,
@@ -565,12 +570,12 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
           }))
         }
 
-        window.clui.getContext(tab.claudeSessionId, tab.workingDirectory, sessionData).then((data) => {
+        window.glui.getContext(tab.providerSessionId, tab.workingDirectory, sessionData, tab.provider).then((data) => {
           removeLoading()
           if (data && data.categories && data.categories.length > 0) {
             addToOriginTab(`__CONTEXT_DATA__${JSON.stringify(data)}`)
           } else {
-            addToOriginTab('Could not retrieve context data. Make sure the Claude CLI is installed and the session is active.')
+            addToOriginTab('Could not retrieve context data. Make sure the agent CLI is installed and the session is active.')
           }
         }).catch(() => {
           removeLoading()
@@ -646,7 +651,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
       setInput('')
       setSlashFilter(null)
       if (!nextModel) {
-        addSystemMessage('Model override cleared. Using Claude Code default.')
+        addSystemMessage('Model override cleared. Using the agent’s configured default.')
       } else if (match) {
         const detail = match.detail ? ` -> ${match.detail}` : ''
         addSystemMessage(`Model switched to ${match.label} (${match.id})${detail}`)
@@ -737,7 +742,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
       }
     }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-    if (e.key === 'Escape' && !showSlashMenu && !showMentionMenu) { window.clui.hideWindow() }
+    if (e.key === 'Escape' && !showSlashMenu && !showMentionMenu) { window.glui.hideWindow() }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -768,7 +773,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
         const reader = new FileReader()
         reader.onload = async () => {
           const dataUrl = reader.result as string
-          const attachment = await window.clui.pasteImage(dataUrl)
+          const attachment = await window.glui.pasteImage(dataUrl)
           if (attachment) addAttachments([attachment])
         }
         reader.readAsDataURL(blob)
@@ -812,7 +817,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
       try {
         const blob = new Blob(chunksRef.current, { type: mimeType })
         const wavBase64 = await blobToWavBase64(blob)
-        const result = await window.clui.transcribeAudio(wavBase64)
+        const result = await window.glui.transcribeAudio(wavBase64)
         if (result.error) {
           const fixable = result.errorType === 'whisper_not_found' || result.errorType === 'model_not_found'
           setVoiceError({ message: result.error, fixable })
@@ -836,7 +841,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
   const hasAttachments = attachments.length > 0
 
   return (
-    <div ref={wrapperRef} data-clui-ui className="flex flex-col w-full relative">
+    <div ref={wrapperRef} data-glui-ui className="flex flex-col w-full relative">
       {/* Slash command menu */}
       <AnimatePresence>
         {showSlashMenu && (
@@ -895,7 +900,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
                         ? 'Transcribing...'
                         : isBusy
                           ? 'Type to queue a message...'
-                          : 'Ask Claude Code anything...'
+                          : `Ask ${PROVIDERS[tab?.provider || 'claude'].name} anything…`
                 }
                 rows={1}
                 className="block w-full bg-transparent resize-none"
@@ -955,7 +960,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
                     <button
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={handleSend}
-                      className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                      className="glui-send w-9 h-9 rounded-full flex items-center justify-center transition-colors"
                       style={{ background: colors.sendBg, color: colors.textOnAccent }}
                       title={isBusy ? 'Queue message' : 'Send (Enter)'}
                     >
@@ -987,7 +992,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
                         ? 'Transcribing...'
                         : isBusy
                           ? 'Type to queue a message...'
-                          : 'Ask Claude Code anything...'
+                          : `Ask ${PROVIDERS[tab?.provider || 'claude'].name} anything…`
                 }
                 rows={1}
                 className="flex-1 bg-transparent resize-none"
@@ -1047,7 +1052,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
                     <button
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={handleSend}
-                      className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                      className="glui-send w-9 h-9 rounded-full flex items-center justify-center transition-colors"
                       style={{ background: colors.sendBg, color: colors.textOnAccent }}
                       title={isBusy ? 'Queue message' : 'Send (Enter)'}
                     >
@@ -1069,7 +1074,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_props, ref
             <button
               onClick={async () => {
                 setFixingWhisper('fixing')
-                const result = await window.clui.fixWhisper()
+                const result = await window.glui.fixWhisper()
                 if (result.ok) {
                   setFixingWhisper('done')
                   setTimeout(() => { setVoiceError(null); setFixingWhisper('idle') }, 1500)
@@ -1159,7 +1164,7 @@ function VoiceButtons({ voiceState, isConnecting, colors, onToggle, onCancel, on
             onMouseDown={(e) => e.preventDefault()}
             onClick={onToggle}
             disabled={isConnecting}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+            className="glui-mic w-9 h-9 rounded-full flex items-center justify-center transition-colors"
             style={{
               background: colors.micBg,
               color: isConnecting ? colors.micDisabled : colors.micColor,

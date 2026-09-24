@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/pingdotgg/t3code",
+  "pullRequest": 2829,
+  "commit": "5ccb2a5268f68a018b172f1eb672cdb74499a5dd",
+  "license": "MIT",
+  "components": [
+    "apps/server",
+    "apps/web",
+    "apps/desktop",
+    "packages",
+    "scripts",
+    "native",
+    "patches",
+    "assets"
+  ],
+  "gluiChanges": "Product identity, isolated data paths, GLUI palettes, desktop summon shortcut, build integration. Internal protocol names remain compatible."
+}

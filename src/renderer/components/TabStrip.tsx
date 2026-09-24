@@ -1,9 +1,11 @@
-import React from 'react'
+import { ProviderPicker } from './ProviderPicker'
+import React, { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, X, Minus, ArrowsClockwise } from '@phosphor-icons/react'
+import { Plus, X, Minus, ArrowsClockwise, GitBranch } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { HistoryPicker } from './HistoryPicker'
 import { SettingsPopover } from './SettingsPopover'
+import { TerminalLaunchControl } from './StatusBar'
 import { useColors, useThemeStore } from '../theme'
 import type { TabStatus } from '../../shared/types'
 
@@ -45,8 +47,8 @@ function UpdateButton() {
 
   return (
     <button
-      data-clui-ui
-      onClick={updateReady ? () => window.clui.installUpdate() : undefined}
+      data-glui-ui
+      onClick={updateReady ? () => window.glui.installUpdate() : undefined}
       className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
       style={{ color: colors.accent, cursor: updateReady ? 'pointer' : 'default' }}
       title={updateReady ? `Update to v${updateVersion} — click to restart` : `Downloading v${updateVersion}…`}
@@ -65,16 +67,24 @@ export function TabStrip() {
   const closeTab = useSessionStore((s) => s.closeTab)
   const toggleExpanded = useSessionStore((s) => s.toggleExpanded)
   const colors = useColors()
+  const tabList = useRef<HTMLDivElement>(null)
+  const activeTab = tabs.find(tab => tab.id === activeTabId)
+  useEffect(() => {
+    const current = tabList.current?.querySelector('[aria-selected="true"]')
+    current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activeTabId, tabs.length])
 
   return (
     <div
-      data-clui-ui
-      className="flex items-center no-drag"
+      data-glui-ui
+      className="glui-tab-strip flex items-center no-drag"
       style={{ padding: '8px 0' }}
     >
+      <ProviderPicker />
       {/* Scrollable tabs area — clipped by master card edge */}
       <div className="relative min-w-0 flex-1">
         <div
+          ref={tabList}
           className="flex items-center gap-1 overflow-x-auto min-w-0"
           style={{
             scrollbarWidth: 'none',
@@ -98,6 +108,10 @@ export function TabStrip() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                   transition={{ duration: 0.15 }}
+                  role="tab"
+                  aria-selected={isActive}
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectTab(tab.id) } }}
                   onClick={() => selectTab(tab.id)}
                   className="group flex items-center gap-1.5 cursor-pointer select-none flex-shrink-0 max-w-[160px] transition-all duration-150"
                   style={{
@@ -114,6 +128,7 @@ export function TabStrip() {
                   <span className="truncate flex-1">{tab.title}</span>
                   {tabs.length > 1 && (
                     <button
+                      aria-label={`Close ${tab.title}`}
                       onClick={(e) => { e.stopPropagation(); closeTab(tab.id) }}
                       className="flex-shrink-0 rounded-full w-4 h-4 flex items-center justify-center transition-opacity"
                       style={{
@@ -135,6 +150,7 @@ export function TabStrip() {
 
       {/* Pinned action buttons — always visible on the right */}
       <div className="flex items-center gap-0.5 flex-shrink-0 ml-1 pr-2">
+        {!!activeTab?.messages.length && <TerminalLaunchControl sessionId={activeTab.providerSessionId} projectPath={activeTab.workingDirectory} />}
         <button
           onClick={() => createTab()}
           className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
@@ -144,6 +160,15 @@ export function TabStrip() {
           <Plus size={14} />
         </button>
 
+        <button
+          data-glui-ui
+          aria-label="Branch conversation"
+          title="Branch conversation"
+          disabled={!tabs.find(t => t.id === activeTabId)?.providerSessionId}
+          onClick={() => useSessionStore.getState().forkThread().catch(error => useSessionStore.getState().addSystemMessage(String(error)))}
+          className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors disabled:opacity-30"
+          style={{ color: colors.textTertiary }}
+        ><GitBranch size={14} /></button>
         <HistoryPicker />
 
         <SettingsPopover />

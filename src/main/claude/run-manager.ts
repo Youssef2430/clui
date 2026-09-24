@@ -9,31 +9,31 @@ import { getCliEnv } from '../cli-env'
 import type { ClaudeEvent, NormalizedEvent, RunOptions, EnrichedError } from '../../shared/types'
 
 const MAX_RING_LINES = 100
-const DEBUG = process.env.CLUI_DEBUG === '1'
+const DEBUG = process.env.GLUI_DEBUG === '1'
 
-// Appended to Claude's default system prompt so it knows it's running inside Clui.
+// Appended to Claude's default system prompt so it knows it's running inside GLUI.
 // Uses --append-system-prompt (additive) not --system-prompt (replacement).
-const CLUI_SYSTEM_HINT = [
-  'IMPORTANT: You are NOT running in a terminal. You are running inside Clui,',
+const GLUI_SYSTEM_HINT = [
+  'IMPORTANT: You are NOT running in a terminal. You are running inside GLUI,',
   'a desktop chat application with a rich UI that renders full markdown.',
-  'Clui is a GUI wrapper around Claude Code — the user sees your output in a',
+  'GLUI is a GUI wrapper around Claude Code — the user sees your output in a',
   'styled conversation view, not a raw terminal.',
   '',
-  'Because Clui renders markdown natively, you MUST use rich formatting when it helps:',
+  'Because GLUI renders markdown natively, you MUST use rich formatting when it helps:',
   '- Always use clickable markdown links: [label](https://url) — they render as real buttons.',
-  '- When the user asks for images, and public web images are appropriate, proactively find and render them in Clui.',
+  '- When the user asks for images, and public web images are appropriate, proactively find and render them in GLUI.',
   '- Workflow: WebSearch for relevant public pages -> WebFetch those pages -> extract real image URLs -> render with markdown ![alt](url).',
   '- Do not guess, fabricate, or construct image URLs from memory.',
   '- Only embed images when the URL is a real publicly accessible image URL found through tools or explicitly provided by the user.',
   '- If real image URLs cannot be obtained confidently, fall back to clickable links and briefly say so.',
-  '- Do not ask whether Clui can render images; assume it can.',
+  '- Do not ask whether GLUI can render images; assume it can.',
   '- Use tables, bold, headers, and bullet lists freely — they all render beautifully.',
   '- Use code blocks with language tags for syntax highlighting.',
   '- For mathematical expressions, use KaTeX-compatible LaTeX syntax:',
   '  - Inline math: wrap in double dollar signs, e.g. $$E = mc^2$$',
   '  - Block/display math: wrap in double dollar signs on their own line, e.g. $$\\int_0^\\infty e^{-x} dx = 1$$',
   '  - Single dollar signs are NOT parsed as math (to avoid conflicts with currency like $100).',
-  '  - Clui renders LaTeX natively via KaTeX — always use this format instead of plain text math.',
+  '  - GLUI renders LaTeX natively via KaTeX — always use this format instead of plain text math.',
   '',
   'You are still a software engineering assistant. Keep using your tools (Read, Edit, Bash, etc.)',
   'normally. But when presenting information, links, resources, or explanations to the user,',
@@ -43,7 +43,7 @@ const CLUI_SYSTEM_HINT = [
 // Tools auto-approved via --allowedTools (never trigger the permission card).
 // Includes routine internal agent mechanics (Agent, Task, TaskOutput, TodoWrite,
 // Notebook) — prompting for these would make UX terrible without adding meaningful
-// safety. This is a deliberate Clui policy choice, not native Claude parity.
+// safety. This is a deliberate GLUI policy choice, not native Claude parity.
 // If runtime evidence shows any of these create real user-facing approval moments,
 // they should be moved to the hook matcher in permission-server.ts instead.
 const SAFE_TOOLS = [
@@ -175,7 +175,7 @@ export class RunManager extends EventEmitter {
     }
 
     if (options.hookSettingsPath) {
-      // Clui-scoped hook settings: the PreToolUse HTTP hook handles permissions
+      // GLUI-scoped hook settings: the PreToolUse HTTP hook handles permissions
       // for dangerous tools (Bash, Edit, Write, MultiEdit).
       // Auto-approve safe tools so they don't trigger the permission card.
       args.push('--settings', options.hookSettingsPath)
@@ -202,8 +202,8 @@ export class RunManager extends EventEmitter {
     if (options.systemPrompt) {
       args.push('--system-prompt', options.systemPrompt)
     }
-    // Always tell Claude it's inside Clui (additive, doesn't replace base prompt)
-    args.push('--append-system-prompt', CLUI_SYSTEM_HINT)
+    // Always tell Claude it's inside GLUI (additive, doesn't replace base prompt)
+    args.push('--append-system-prompt', GLUI_SYSTEM_HINT)
 
     if (DEBUG) {
       log(`Starting run ${requestId}: ${this.claudeBinary} ${args.join(' ')}`)

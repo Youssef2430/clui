@@ -3,7 +3,7 @@ import { useSessionStore } from '../stores/sessionStore'
 import { openInPreferredTerminal } from '../utils/terminal'
 
 /**
- * Centralized keyboard shortcut handler for Clui.
+ * Centralized keyboard shortcut handler for GLUI.
  *
  * Registered on the document level so shortcuts work regardless of focus.
  * All shortcuts use Cmd (Meta) on macOS.
@@ -169,7 +169,7 @@ export function useKeyboardShortcuts({
         const state = useSessionStore.getState()
         const tab = state.tabs.find((t) => t.id === state.activeTabId)
         if (tab) {
-          openInPreferredTerminal(tab.claudeSessionId, tab.workingDirectory)
+          openInPreferredTerminal(tab.providerSessionId, tab.workingDirectory)
         }
         return
       }

@@ -1,6 +1,9 @@
+import { copyWithWebCitations } from '../lib/webCitations'
+import type { PillThread } from "../../../orchestrator/packages/shared/src/gluiPill"
+import { PROVIDERS, isProviderId, type ProviderId, type ProviderInfo } from '../../shared/providers'
 import { create } from 'zustand'
 import type { TabStatus, NormalizedEvent, EnrichedError, Message, TabState, Attachment, CatalogPlugin, PluginStatus, TodoTask, SearchIndexStatus } from '../../shared/types'
-import { EMPTY_MODEL_SETTINGS, type ClaudeModelSettings } from '../../shared/models'
+import { EMPTY_MODEL_SETTINGS, type AgentModelSettings } from '../../shared/models'
 import { useThemeStore } from '../theme'
 import notificationSrc from '../../../resources/notification.mp3'
 
@@ -14,7 +17,7 @@ export {
 
 // ─── Persisted permission mode ───
 
-const PERMISSION_MODE_KEY = 'clui-permission-mode'
+const PERMISSION_MODE_KEY = 'glui-permission-mode'
 
 function loadPermissionMode(): 'ask' | 'auto' {
   try {
@@ -39,6 +42,13 @@ interface StaticInfo {
 }
 
 interface State {
+  providers: ProviderInfo[]
+  applyThreadSnapshot: (tabId: string, snapshot: PillThread) => void
+  loadEarlierHistory: (tabId: string) => Promise<void>
+  forkThread: () => Promise<void>
+  refreshProviders: () => Promise<void>
+  setProvider: (provider: ProviderId) => Promise<void>
+  respondInput: (tabId: string, questionId: string, answers: Record<string, { answers: string[] }>) => Promise<void>
   tabs: TabState[]
   activeTabId: string
   /** Global expand/collapse — user-controlled, not per-tab */
@@ -46,7 +56,7 @@ interface State {
   /** Global info fetched on startup (not per-session) */
   staticInfo: StaticInfo | null
   /** Model choices discovered from the user's Claude settings */
-  modelSettings: ClaudeModelSettings
+  modelSettings: AgentModelSettings
   /** User's preferred model override (null = use default) */
   preferredModel: string | null
   /** Global permission mode: 'ask' shows cards, 'auto' auto-approves all tool calls */
@@ -63,6 +73,8 @@ interface State {
 
   // Marketplace state
   marketplaceOpen: boolean
+  marketplaceTargets: Array<{ id: string; name: string }>
+  marketplacePluginErrors: Record<string, string>
   marketplaceCatalog: CatalogPlugin[]
   marketplaceLoading: boolean
   marketplaceError: string | null
@@ -82,8 +94,12 @@ interface State {
   initStaticInfo: () => Promise<void>
   refreshModelSettings: (projectPath?: string) => Promise<void>
   setPreferredModel: (model: string | null) => void
+  setModelOption: (id: string, value: string | boolean) => void
+  setRuntimeMode: (mode: NonNullable<TabState["runtimeMode"]>) => void
+  modelSettingsError: string | null
+  modelSettingsLoading: boolean
   setPermissionMode: (mode: 'ask' | 'auto') => void
-  createTab: () => Promise<string>
+  createTab: (provider?: ProviderId) => Promise<string>
   selectTab: (tabId: string) => void
   closeTab: (tabId: string) => void
   clearTab: () => void
@@ -109,10 +125,10 @@ interface State {
   toggleSearchPanel: () => void
   closeSearchPanel: () => void
   setSearchIndexStatus: (status: SearchIndexStatus) => void
-  resumeSession: (sessionId: string, title?: string, projectPath?: string) => Promise<string>
-  addSystemMessage: (content: string) => void
+  resumeSession: (sessionId: string, title?: string, projectPath?: string, provider?: ProviderId) => Promise<string>
+  addSystemMessage: (content: string, tabId?: string) => void
   sendMessage: (prompt: string, projectPath?: string) => void
-  respondPermission: (tabId: string, questionId: string, optionId: string) => void
+  respondPermission: (tabId: string, questionId: string, optionId: string) => Promise<void>
   addDirectory: (dir: string) => void
   removeDirectory: (dir: string) => void
   setBaseDirectory: (dir: string) => void
@@ -140,7 +156,7 @@ notificationAudio.volume = 1.0
 async function playNotificationIfHidden(): Promise<void> {
   if (!useThemeStore.getState().soundEnabled) return
   try {
-    const visible = await window.clui.isVisible()
+    const visible = await window.glui.isVisible()
     if (!visible) {
       notificationAudio.currentTime = 0
       notificationAudio.play().catch(() => {})
@@ -230,18 +246,24 @@ function finalizeCompactionNotice(tab: TabState, payload: Omit<CompactionNoticeP
   tab.compactionMessageId = null
 }
 
-function makeLocalTab(): TabState {
+function makeLocalTab(provider: ProviderId = loadDefaultProvider()): TabState {
   return {
     id: crypto.randomUUID(),
-    claudeSessionId: null,
+    provider,
+    preferredModel: null,
+    providerSessionId: null,
     status: 'idle',
     activeRequestId: null,
     hasUnread: false,
     currentActivity: '',
     permissionQueue: [],
+    inputRequests: [],
     permissionDenied: null,
     attachments: [],
     messages: [],
+    hasMoreHistory: false,
+    historyLoading: false,
+    historyError: null,
     title: 'New Tab',
     lastResult: null,
     sessionModel: null,
@@ -273,7 +295,7 @@ async function ensureBackendTabRegistered(tabId: string): Promise<string> {
     }
 
     try {
-      const health = await window.clui.tabHealth()
+      const health = await window.glui.tabHealth()
       if (health?.tabs?.some((tab) => tab.tabId === tabId)) {
         return tabId
       }
@@ -285,7 +307,7 @@ async function ensureBackendTabRegistered(tabId: string): Promise<string> {
       }
     }
 
-    const { tabId: backendTabId } = await window.clui.createTab()
+    const { tabId: backendTabId } = await window.glui.createTab(currentTab.provider)
     useSessionStore.setState((s) => ({
       tabs: s.tabs.map((t) => (
         t.id === tabId
@@ -313,9 +335,75 @@ async function ensureBackendTabRegistered(tabId: string): Promise<string> {
 
 const backendTabRegistrations = new Map<string, Promise<string>>()
 
+function loadDefaultProvider(): ProviderId {
+  try { const value = localStorage.getItem('glui-default-provider'); if (isProviderId(value)) return value } catch {}
+  return 'claude'
+}
+
+let startupInfo: ReturnType<typeof window.glui.start> | undefined
 const initialTab = makeLocalTab()
 
 export const useSessionStore = create<State>((set, get) => ({
+  providers: [],
+  refreshProviders: async () => { set({ providers: await window.glui.listProviders() }) },
+  applyThreadSnapshot: (tabId, snapshot) => {
+    const previous = get().tabs.find(t => t.id === tabId)
+    if (previous?.status === 'running' && snapshot.status === 'completed') void playNotificationIfHidden()
+    const oldMessages = new Map(previous?.messages.map(message => [message.id, message]))
+    const messages = snapshot.messages.map(message => {
+      const old = oldMessages.get(message.id)
+      const next = { ...message, attachments: message.attachments ?? old?.attachments }
+      return old && Object.keys(next).every(key => key === 'attachments' || key === 'contextChange' || key === 'sources'
+        ? JSON.stringify(old[key]) === JSON.stringify(next[key])
+        : old[key as keyof Message] === next[key as keyof Message]) ? old : next
+    })
+    set(s => ({ tabs: s.tabs.map(t => t.id === tabId ? {
+      ...t, provider: snapshot.provider, providerSessionId: `glui:${snapshot.threadId}`,
+      title: snapshot.title, sessionModel: snapshot.model, modelOptions: t.modelOptions ?? snapshot.modelOptions, runtimeMode: t.runtimeMode ?? snapshot.runtimeMode, status: snapshot.status,
+      workingDirectory: snapshot.workspaceRoot || t.workingDirectory,
+      activeRequestId: snapshot.activeRequestId, messages, hasMoreHistory: snapshot.hasMoreHistory,
+      permissionQueue: snapshot.permissions, inputRequests: snapshot.questions,
+      queuedPrompts: snapshot.queuedPrompts, currentActivity: snapshot.status === 'running' ? 'Working…' : snapshot.status === 'connecting' ? 'Starting…' : '',
+      hasUnread: t.id !== s.activeTabId && snapshot.status === 'completed' ? true : t.hasUnread,
+    } : t) }))
+  },
+  loadEarlierHistory: async (tabId) => {
+    const tab = get().tabs.find(t => t.id === tabId)
+    if (!tab?.providerSessionId?.startsWith('glui:') || !tab.hasMoreHistory || tab.historyLoading) return
+    const sessionId = tab.providerSessionId
+    const update = (fields: Pick<TabState, 'historyLoading' | 'historyError'>) => {
+      set(s => ({ tabs: s.tabs.map(t => t.id === tabId && t.providerSessionId === sessionId ? { ...t, ...fields } : t) }))
+    }
+    update({ historyLoading: true, historyError: null })
+    try {
+      await window.glui.loadEarlierHistory(tabId)
+      update({ historyLoading: false, historyError: null })
+    } catch (error) {
+      update({ historyLoading: false, historyError: error instanceof Error ? error.message : String(error) })
+    }
+  },
+  forkThread: async () => {
+    const current = get().tabs.find(t => t.id === get().activeTabId)
+    if (!current) return
+    const branch = await window.glui.forkThread(current.id)
+    set(s => ({ tabs: [...s.tabs, { ...makeLocalTab(branch.provider), id: branch.tabId, providerSessionId: branch.sessionId, workingDirectory: branch.projectPath, hasChosenDirectory: true, title: 'Branch' }], activeTabId: branch.tabId, isExpanded: true }))
+    await window.glui.attachThread(branch.tabId, branch.sessionId)
+  },
+  setProvider: async (provider) => {
+    const current = get().tabs.find(t => t.id === get().activeTabId)
+    if (!current || current.provider === provider) return
+    if (current.status === 'running' || current.status === 'connecting') return
+    const id = await ensureBackendTabRegistered(current.id)
+    await window.glui.setProvider(id, provider)
+    set(s => ({ tabs: s.tabs.map(t => t.id === id ? { ...t, provider, preferredModel: null, sessionModel: null, modelOptions: undefined, runtimeMode: undefined } : t), modelSettings: EMPTY_MODEL_SETTINGS }))
+    try { localStorage.setItem('glui-default-provider', provider) } catch {}
+    void get().refreshModelSettings(current.workingDirectory === '~' ? undefined : current.workingDirectory)
+  },
+  respondInput: async (tabId, questionId, answers) => {
+    const accepted = await window.glui.respondInput(tabId, questionId, answers)
+    if (!accepted) throw new Error('This question is no longer active')
+    set(s => ({ tabs: s.tabs.map(t => t.id === tabId ? { ...t, inputRequests: t.inputRequests.filter(q => q.questionId !== questionId) } : t) }))
+  },
   tabs: [initialTab],
   activeTabId: initialTab.id,
   isExpanded: false,
@@ -336,10 +424,14 @@ export const useSessionStore = create<State>((set, get) => ({
 
   // Model settings
   modelSettings: EMPTY_MODEL_SETTINGS,
+  modelSettingsError: null,
+  modelSettingsLoading: false,
 
   // Marketplace
   marketplaceOpen: false,
   marketplaceCatalog: [],
+  marketplaceTargets: [],
+  marketplacePluginErrors: {},
   marketplaceLoading: false,
   marketplaceError: null,
   marketplaceInstalledNames: [],
@@ -349,8 +441,9 @@ export const useSessionStore = create<State>((set, get) => ({
 
   initStaticInfo: async () => {
     try {
-      const result = await window.clui.start()
+      const result = await (startupInfo ||= window.glui.start())
       set({
+        providers: result.providers || [],
         staticInfo: {
           version: result.version || 'unknown',
           email: result.auth?.email || null,
@@ -358,39 +451,53 @@ export const useSessionStore = create<State>((set, get) => ({
           projectPath: result.projectPath || '~',
           homePath: result.homePath || '~',
         },
-        modelSettings: result.modelSettings || EMPTY_MODEL_SETTINGS,
+        modelSettings: get().tabs.find(t => t.id === get().activeTabId)?.provider === 'claude' ? result.modelSettings || EMPTY_MODEL_SETTINGS : get().modelSettings,
       })
+      const active = get().tabs.find(t => t.id === get().activeTabId)
+      if (active && !result.providers?.find(p => p.id === active.provider)?.installed) {
+        const available = result.providers?.find(p => p.installed)
+        if (available) await get().setProvider(available.id)
+      }
       // Sync persisted permission mode to the main process
       const mode = get().permissionMode
       if (mode !== 'ask') {
-        window.clui.setPermissionMode(mode)
+        window.glui.setPermissionMode(mode)
       }
     } catch {}
   },
 
   refreshModelSettings: async (projectPath) => {
+    const tab = get().tabs.find(t => t.id === get().activeTabId)
+    if (!tab) return
+    set({ modelSettingsLoading: true, modelSettingsError: null })
     try {
-      const modelSettings = await window.clui.getModelSettings(projectPath)
-      set({ modelSettings: modelSettings || EMPTY_MODEL_SETTINGS })
-    } catch {}
+      const modelSettings = await window.glui.getModelSettings(projectPath, tab.provider)
+      const active = get().tabs.find(t => t.id === get().activeTabId)
+      if (active?.id === tab.id && active.provider === tab.provider && active.workingDirectory === tab.workingDirectory) set({ modelSettings: modelSettings || EMPTY_MODEL_SETTINGS, modelSettingsLoading: false })
+    } catch (error) { if (get().activeTabId === tab.id) set({ modelSettingsLoading: false, modelSettingsError: String(error) }) }
   },
-
   setPreferredModel: (model) => {
-    set({ preferredModel: model })
+    set(s => ({ tabs: s.tabs.map(t => t.id === s.activeTabId ? { ...t, preferredModel: model, modelOptions: [] } : t) }))
   },
 
+  setModelOption: (id, value) => {
+    set(s => ({ tabs: s.tabs.map(t => t.id === s.activeTabId ? { ...t, modelOptions: [...(t.modelOptions ?? []).filter(o => o.id !== id), { id, value }] } : t) }))
+  },
+  setRuntimeMode: (runtimeMode) => {
+    set(s => ({ tabs: s.tabs.map(t => t.id === s.activeTabId ? { ...t, runtimeMode } : t) }))
+  },
   setPermissionMode: (mode) => {
     set({ permissionMode: mode })
     savePermissionMode(mode)
-    window.clui.setPermissionMode(mode)
+    window.glui.setPermissionMode(mode)
   },
 
-  createTab: async () => {
+  createTab: async (provider = loadDefaultProvider()) => {
     const homeDir = get().staticInfo?.homePath || '~'
     try {
-      const { tabId } = await window.clui.createTab()
+      const { tabId } = await window.glui.createTab(provider)
       const tab: TabState = {
-        ...makeLocalTab(),
+        ...makeLocalTab(provider),
         id: tabId,
         workingDirectory: homeDir,
       }
@@ -400,7 +507,7 @@ export const useSessionStore = create<State>((set, get) => ({
       }))
       return tabId
     } catch {
-      const tab = makeLocalTab()
+      const tab = makeLocalTab(provider)
       tab.workingDirectory = homeDir
       set((s) => ({
         tabs: [...s.tabs, tab],
@@ -469,8 +576,8 @@ export const useSessionStore = create<State>((set, get) => ({
     set({ marketplaceLoading: true, marketplaceError: null })
     try {
       const [catalog, installed] = await Promise.all([
-        window.clui.fetchMarketplace(forceRefresh),
-        window.clui.listInstalledPlugins(),
+        window.glui.fetchMarketplace(forceRefresh),
+        window.glui.listInstalledPlugins(),
       ])
       if (catalog.error && catalog.plugins.length === 0) {
         set({ marketplaceError: catalog.error, marketplaceLoading: false })
@@ -479,18 +586,15 @@ export const useSessionStore = create<State>((set, get) => ({
       const installedSet = new Set(installed.map((n) => n.toLowerCase()))
       const pluginStates: Record<string, PluginStatus> = {}
       for (const p of catalog.plugins) {
-        // For SKILL.md skills: match individual name against ~/.claude/skills/ dirs
-        // For CLI plugins: match installName or "installName@marketplace" against installed_plugins.json
-        const candidates = p.isSkillMd
-          ? [p.installName]
-          : [p.installName, `${p.installName}@${p.marketplace}`]
-        const isInstalled = candidates.some((c) => installedSet.has(c.toLowerCase()))
+        const isInstalled = installedSet.has(p.id.toLowerCase())
         pluginStates[p.id] = isInstalled ? 'installed' : 'not_installed'
       }
       set({
         marketplaceCatalog: catalog.plugins,
+        marketplaceTargets: catalog.targets ?? [],
         marketplaceInstalledNames: installed,
         marketplacePluginStates: pluginStates,
+        marketplaceError: catalog.error ?? null,
         marketplaceLoading: false,
       })
     } catch (err: unknown) {
@@ -510,37 +614,28 @@ export const useSessionStore = create<State>((set, get) => ({
   },
 
   installMarketplacePlugin: async (plugin) => {
-    set((s) => ({
-      marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: 'installing' },
-    }))
-    const result = await window.clui.installPlugin(plugin.repo, plugin.installName, plugin.marketplace, plugin.sourcePath, plugin.isSkillMd)
-    if (result.ok) {
-      set((s) => ({
-        marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: 'installed' as PluginStatus },
-        marketplaceInstalledNames: [...s.marketplaceInstalledNames, plugin.installName],
-      }))
-    } else {
-      set((s) => ({
-        marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: 'failed' },
-      }))
-    }
+    set(s => ({ marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: 'installing' }, marketplacePluginErrors: { ...s.marketplacePluginErrors, [plugin.id]: '' } }))
+    try {
+      const result = await window.glui.installPlugin(plugin.repo, plugin.installName, plugin.marketplace, plugin.sourcePath, plugin.isSkillMd)
+      if (!result.ok) throw new Error(result.error || 'Installation failed')
+      const catalog = await window.glui.fetchMarketplace()
+      set(s => ({ marketplaceCatalog: catalog.plugins, marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: 'installed' }, marketplaceInstalledNames: [...new Set([...s.marketplaceInstalledNames, plugin.id])] }))
+    } catch (error) { set(s => ({ marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: plugin.managed ? 'installed' : 'failed' }, marketplacePluginErrors: { ...s.marketplacePluginErrors, [plugin.id]: error instanceof Error ? error.message : String(error) } })) }
   },
-
   uninstallMarketplacePlugin: async (plugin) => {
-    const result = await window.clui.uninstallPlugin(plugin.installName)
-    if (result.ok) {
-      set((s) => ({
-        marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: 'not_installed' as PluginStatus },
-        marketplaceInstalledNames: s.marketplaceInstalledNames.filter((n) => n !== plugin.installName),
-      }))
-    }
+    set(s => ({ marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: 'removing' }, marketplacePluginErrors: { ...s.marketplacePluginErrors, [plugin.id]: '' } }))
+    try {
+      const result = await window.glui.uninstallPlugin(plugin.installName)
+      if (!result.ok) throw new Error(result.error || 'Removal failed')
+      set(s => ({ marketplaceCatalog: s.marketplaceCatalog.map(p => p.id === plugin.id ? { ...p, managed: false, installedProviders: [] } : p), marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: 'not_installed' }, marketplaceInstalledNames: s.marketplaceInstalledNames.filter(n => n !== plugin.id) }))
+    } catch (error) { set(s => ({ marketplacePluginStates: { ...s.marketplacePluginStates, [plugin.id]: 'installed' }, marketplacePluginErrors: { ...s.marketplacePluginErrors, [plugin.id]: error instanceof Error ? error.message : String(error) } })) }
   },
 
   buildYourOwn: () => {
     set({ marketplaceOpen: false, isExpanded: true })
     // Small delay to let the UI transition
     setTimeout(() => {
-      get().sendMessage('Help me create a new Claude Code skill')
+      get().sendMessage('Help me create a portable agent skill with SKILL.md that works in Claude Code, Codex, and OpenCode')
     }, 100)
   },
 
@@ -575,9 +670,9 @@ export const useSessionStore = create<State>((set, get) => ({
     const currentTab = tabs.find((t) => t.id === activeTabId)
     const dir = currentTab?.workingDirectory || get().staticInfo?.homePath || '~'
     try {
-      const { tabId } = await window.clui.createTab()
+      const { tabId } = await window.glui.createTab(currentTab?.provider)
       const tab: TabState = {
-        ...makeLocalTab(),
+        ...makeLocalTab(currentTab?.provider),
         id: tabId,
         workingDirectory: dir,
         hasChosenDirectory: currentTab?.hasChosenDirectory ?? false,
@@ -588,7 +683,7 @@ export const useSessionStore = create<State>((set, get) => ({
       }))
       return tabId
     } catch {
-      const tab = makeLocalTab()
+      const tab = makeLocalTab(currentTab?.provider)
       tab.workingDirectory = dir
       tab.hasChosenDirectory = currentTab?.hasChosenDirectory ?? false
       set((s) => ({
@@ -604,7 +699,7 @@ export const useSessionStore = create<State>((set, get) => ({
     const tab = tabs.find((t) => t.id === activeTabId)
     if (!tab) return
     if (tab.status === 'running' || tab.status === 'connecting') {
-      window.clui.stopTab(activeTabId).catch(() => {})
+      window.glui.stopTab(activeTabId).catch(() => {})
     }
   },
 
@@ -616,7 +711,7 @@ export const useSessionStore = create<State>((set, get) => ({
     for (let i = tab.messages.length - 1; i >= 0; i--) {
       const msg = tab.messages[i]
       if (msg.role === 'assistant' && !msg.toolName) {
-        navigator.clipboard.writeText(msg.content).catch(() => {})
+        navigator.clipboard.writeText(copyWithWebCitations(msg.content, msg.sources)).catch(() => {})
         // Show "Copied" feedback on the message's CopyButton
         set({ copiedMessageId: msg.id })
         setTimeout(() => {
@@ -645,7 +740,7 @@ export const useSessionStore = create<State>((set, get) => ({
     } else {
       set({ isExpanded: false, searchPanelOpen: true, marketplaceOpen: false, historyPickerOpen: false })
       // Lazy-trigger indexing on first open
-      window.clui.triggerSearchIndex()
+      if (get().tabs.find(t => t.id === get().activeTabId)?.provider === 'claude') window.glui.triggerSearchIndex()
     }
   },
 
@@ -654,7 +749,7 @@ export const useSessionStore = create<State>((set, get) => ({
   setSearchIndexStatus: (status: SearchIndexStatus) => set({ searchIndexStatus: status }),
 
   closeTab: (tabId) => {
-    window.clui.closeTab(tabId).catch(() => {})
+    window.glui.closeTab(tabId).catch(() => {})
 
     const s = get()
     const remaining = s.tabs.filter((t) => t.id !== tabId)
@@ -677,12 +772,20 @@ export const useSessionStore = create<State>((set, get) => ({
 
   clearTab: () => {
     const { activeTabId } = get()
+    const current = get().tabs.find(t => t.id === activeTabId)
+    if (current?.status === 'running' || current?.status === 'connecting') return
+    window.glui.resetTabSession(activeTabId)
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === activeTabId
           ? {
               ...t,
               messages: [],
+              hasMoreHistory: false,
+              historyLoading: false,
+              historyError: null,
+              providerSessionId: null,
+              inputRequests: [],
               lastResult: null,
               currentActivity: '',
               permissionQueue: [],
@@ -698,96 +801,42 @@ export const useSessionStore = create<State>((set, get) => ({
     }))
   },
 
-  resumeSession: async (sessionId, title, projectPath) => {
-    // projectPath may be an encoded dir name (e.g. "-Users-foo-bar") from LIST_ALL_SESSIONS
-    // or a real filesystem path. Encoded names are used for JSONL lookups; real paths for workingDirectory.
-    const isEncodedDir = projectPath?.startsWith('-') && !projectPath?.includes('/')
+  resumeSession: async (sessionId, title, projectPath, provider = 'claude') => {
+    const isEncoded = projectPath?.startsWith('-') && !projectPath.includes('/')
     const lookupDir = projectPath || get().staticInfo?.homePath || '~'
-    const workingDir = isEncodedDir ? (get().staticInfo?.homePath || '~') : lookupDir
-    try {
-      const { tabId } = await window.clui.createTab()
-
-      // Load previous conversation messages from the JSONL file
-      const history = await window.clui.loadSession(sessionId, lookupDir).catch(() => [])
-      const messages: Message[] = history.map((m) => ({
-        id: nextMsgId(),
-        role: m.role as Message['role'],
-        content: m.content,
-        toolName: m.toolName,
-        toolId: m.toolId,
-        toolStatus: m.toolName ? 'completed' as const : undefined,
-        timestamp: m.timestamp,
-      }))
-
-      // Fallback: if the project folder couldn't be resolved (very old sessions without
-      // a cwd field in their JSONL), warn the user rather than silently failing later.
-      if (isEncodedDir) {
-        messages.push({
-          id: nextMsgId(),
-          role: 'system' as const,
-          content: "This session's original project folder couldn't be determined. To continue, open it from the correct project folder instead.",
-          timestamp: Date.now(),
-        })
-      }
-
-      const tab: TabState = {
-        ...makeLocalTab(),
-        id: tabId,
-        claudeSessionId: sessionId,
-        title: title || 'Resumed Session',
-        workingDirectory: workingDir,
-        hasChosenDirectory: !isEncodedDir && !!projectPath,
-        messages,
-      }
-      set((s) => ({
-        tabs: [...s.tabs, tab],
-        activeTabId: tab.id,
-        isExpanded: true,
-      }))
-
-      // Pre-fetch tool results for resumed sessions
-      const toolMsgs = messages.filter((m) => m.role === 'tool' && m.toolId)
-      if (toolMsgs.length > 0) {
-        window.clui.getToolResults(sessionId, lookupDir).then((results) => {
-          if (!results || Object.keys(results).length === 0) return
-          set((s) => ({
-            tabs: s.tabs.map((t) => {
-              if (t.id !== tabId) return t
-              return {
-                ...t,
-                messages: t.messages.map((m) => {
-                  if (m.role === 'tool' && m.toolId && results[m.toolId]) {
-                    return { ...m, toolResult: results[m.toolId] }
-                  }
-                  return m
-                }),
-              }
-            }),
-          }))
-        }).catch(() => {})
-      }
-      // Don't call initSession — the first real prompt will use --resume with the sessionId
-      return tabId
-    } catch {
-      const tab = makeLocalTab()
-      tab.claudeSessionId = sessionId
-      tab.title = title || 'Resumed Session'
-      tab.workingDirectory = workingDir
-      tab.hasChosenDirectory = !isEncodedDir && !!projectPath
-      set((s) => ({
-        tabs: [...s.tabs, tab],
-        activeTabId: tab.id,
-        isExpanded: true,
-      }))
-      return tab.id
+    const workingDir = isEncoded ? get().staticInfo?.homePath || '~' : lookupDir
+    const { tabId } = await window.glui.createTab(provider)
+    const pending: TabState = {
+      ...makeLocalTab(provider), id: tabId, providerSessionId: sessionId,
+      title: title || 'Resumed session', workingDirectory: workingDir,
+      hasChosenDirectory: !isEncoded && !!projectPath, status: 'connecting', currentActivity: 'Loading history…',
     }
+    // Select the loading conversation immediately. Input stays disabled until its
+    // transcript is ready, so a fast follow-up cannot be sent to the previous tab.
+    set(s => ({ tabs: [...s.tabs, pending], activeTabId: tabId, isExpanded: true }))
+    try {
+      if (sessionId.startsWith('glui:')) {
+        await window.glui.attachThread(tabId, sessionId)
+        return tabId
+      }
+      const history = await window.glui.loadSession(sessionId, lookupDir, provider)
+      const messages: Message[] = history.map(m => ({ id: nextMsgId(), role: m.role as Message['role'], content: m.content,
+        toolName: m.toolName, toolId: m.toolId, toolResult: m.toolName ? m.content : undefined, toolStatus: m.toolName ? 'completed' : undefined, timestamp: m.timestamp }))
+      if (isEncoded) messages.push({ id: nextMsgId(), role: 'system', content: 'The original project folder could not be found. Choose the correct folder before continuing.', timestamp: Date.now() })
+      set(s => ({ tabs: s.tabs.map(t => t.id === tabId ? { ...t, messages, status: 'idle', currentActivity: '' } : t) }))
+      if (provider === 'claude') {
+        void window.glui.getToolResults(sessionId, lookupDir, provider).then(results => set(s => ({ tabs: s.tabs.map(t => t.id === tabId ? { ...t, messages: t.messages.map(m => m.toolId && results[m.toolId] ? { ...m, toolResult: results[m.toolId] } : m) } : t) }))).catch(() => {})
+      }
+    } catch (error) {
+      get().handleError(tabId, { message: `Unable to load history: ${String(error)}`, stderrTail: [], exitCode: null, elapsedMs: 0, toolCallCount: 0 })
+    }
+    return tabId
   },
 
-  addSystemMessage: (content) => {
-    const { activeTabId } = get()
+  addSystemMessage: (content, tabId = get().activeTabId) => {
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === activeTabId
+        t.id === tabId
           ? {
               ...t,
               messages: [
@@ -803,8 +852,9 @@ export const useSessionStore = create<State>((set, get) => ({
   // ─── Permission response ───
 
   respondPermission: (tabId, questionId, optionId) => {
-    // Send to backend
-    window.clui.respondPermission(tabId, questionId, optionId).catch(() => {})
+    // Only dismiss an approval after the owning backend acknowledges it.
+    return window.glui.respondPermission(tabId, questionId, optionId).then(accepted => {
+      if (!accepted) throw new Error("This permission request is no longer active")
 
     // Remove answered item from queue; show next tool's activity or clear
     set((s) => ({
@@ -820,6 +870,7 @@ export const useSessionStore = create<State>((set, get) => ({
         }
       }),
     }))
+    })
   },
 
   // ─── Directory management ───
@@ -853,16 +904,19 @@ export const useSessionStore = create<State>((set, get) => ({
 
   setBaseDirectory: (dir) => {
     const { activeTabId } = get()
-    window.clui.resetTabSession(activeTabId)
+    const current = get().tabs.find(t => t.id === activeTabId)
+    if (current?.status === 'running' || current?.status === 'connecting') return
+    window.glui.resetTabSession(activeTabId)
     void get().refreshModelSettings(dir)
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === activeTabId
           ? {
-              ...t,
+              ...makeLocalTab(t.provider),
+              id: t.id, preferredModel: t.preferredModel, modelOptions: t.modelOptions, runtimeMode: t.runtimeMode,
               workingDirectory: dir,
               hasChosenDirectory: true,
-              claudeSessionId: null,
+              providerSessionId: null,
               additionalDirs: [],
             }
           : t
@@ -913,10 +967,14 @@ export const useSessionStore = create<State>((set, get) => ({
     const btwId = crypto.randomUUID()
     set({ btwState: { btwId, question, responseText: '', status: 'loading' } })
 
-    window.clui.btwPrompt({
+    window.glui.btwPrompt({
       btwId,
       question,
       projectPath: tab.workingDirectory,
+      provider: tab.provider,
+      model: tab.preferredModel || tab.sessionModel || undefined,
+          modelOptions: tab.modelOptions,
+          runtimeMode: tab.runtimeMode,
     }).catch(() => {
       set((s) => s.btwState?.btwId === btwId
         ? { btwState: { ...s.btwState!, status: 'error' as const, errorMessage: 'Failed to start' } }
@@ -975,7 +1033,8 @@ export const useSessionStore = create<State>((set, get) => ({
         const tabId = await ensureBackendTabRegistered(initialTab.id)
         errorTabId = tabId
 
-        const { tabs, staticInfo, preferredModel } = get()
+        if (!get().staticInfo) await get().initStaticInfo()
+        const { tabs, staticInfo } = get()
         const tab = tabs.find((t) => t.id === tabId)
         if (!tab) return
 
@@ -1032,7 +1091,7 @@ export const useSessionStore = create<State>((set, get) => ({
               messages: [
                 ...withEffectiveBase.messages,
                 {
-                  id: nextMsgId(),
+                  id: requestId,
                   role: 'user' as const,
                   content: prompt,
                   timestamp: Date.now(),
@@ -1044,11 +1103,15 @@ export const useSessionStore = create<State>((set, get) => ({
         }))
 
         // Send to backend — ControlPlane will queue if a run is active
-        await window.clui.prompt(tabId, requestId, {
+        await window.glui.prompt(tabId, requestId, {
           prompt: fullPrompt,
           projectPath: resolvedPath,
-          sessionId: tab.claudeSessionId || undefined,
-          model: preferredModel || undefined,
+          sessionId: tab.providerSessionId || undefined,
+          provider: tab.provider,
+          attachments: tab.attachments,
+          model: tab.preferredModel || tab.sessionModel || undefined,
+          modelOptions: tab.modelOptions,
+          runtimeMode: tab.runtimeMode,
           addDirs: tab.additionalDirs.length > 0 ? tab.additionalDirs : undefined,
         })
       } catch (err) {
@@ -1076,8 +1139,15 @@ export const useSessionStore = create<State>((set, get) => ({
         const updated = { ...tab }
 
         switch (event.type) {
+          case 'user_input':
+            updated.inputRequests = [...updated.inputRequests.filter(q => q.questionId !== event.questionId), event]
+            updated.currentActivity = 'Waiting for your answer'
+            break
+          case 'tool_result':
+            updated.messages = updated.messages.map(m => m.toolId === event.toolId ? { ...m, toolResult: event.result, toolStatus: event.isError ? 'error' : 'completed' } : m)
+            break
           case 'session_init':
-            updated.claudeSessionId = event.sessionId
+            updated.providerSessionId = event.sessionId
             updated.sessionModel = event.model
             updated.sessionTools = event.tools
             updated.sessionMcpServers = event.mcpServers
@@ -1184,9 +1254,9 @@ export const useSessionStore = create<State>((set, get) => ({
             // Skip subagent tool call updates
             if (event.parentToolUseId) break
             const msgs = [...updated.messages]
-            const lastTool = [...msgs].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
+            const lastTool = msgs.find(m => m.toolId === event.toolId) || [...msgs].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
             if (lastTool) {
-              lastTool.toolInput = (lastTool.toolInput || '') + event.partialInput
+              lastTool.toolInput = event.replace ? event.partialInput : (lastTool.toolInput || '') + event.partialInput
             }
             updated.messages = msgs
             break
@@ -1301,6 +1371,7 @@ export const useSessionStore = create<State>((set, get) => ({
             updated.activeRequestId = null
             updated.currentActivity = ''
             updated.permissionQueue = []
+            updated.inputRequests = []
             updated.isCompacting = false
             updated.lastResult = {
               totalCostUsd: event.costUsd,
@@ -1355,6 +1426,7 @@ export const useSessionStore = create<State>((set, get) => ({
             updated.activeRequestId = null
             updated.currentActivity = ''
             updated.permissionQueue = []
+            updated.inputRequests = []
             updated.permissionDenied = null
             updated.isCompacting = false
             if (updated.compactionMessageId) {
@@ -1374,6 +1446,7 @@ export const useSessionStore = create<State>((set, get) => ({
             updated.activeRequestId = null
             updated.currentActivity = ''
             updated.permissionQueue = []
+            updated.inputRequests = []
             updated.permissionDenied = null
             updated.isCompacting = false
             if (updated.compactionMessageId) {
@@ -1445,10 +1518,10 @@ export const useSessionStore = create<State>((set, get) => ({
     // After task_complete, fetch tool results from the session JSONL file
     if (event.type === 'task_complete') {
       const tab = get().tabs.find((t) => t.id === tabId)
-      if (tab?.claudeSessionId) {
+      if (tab?.providerSessionId) {
         const toolMsgs = tab.messages.filter((m) => m.role === 'tool' && m.toolId && !m.toolResult)
         if (toolMsgs.length > 0) {
-          window.clui.getToolResults(tab.claudeSessionId, tab.workingDirectory).then((results) => {
+          window.glui.getToolResults(tab.providerSessionId, tab.workingDirectory, tab.provider).then((results) => {
             if (!results || Object.keys(results).length === 0) return
             set((s) => ({
               tabs: s.tabs.map((t) => {
@@ -1478,7 +1551,8 @@ export const useSessionStore = create<State>((set, get) => ({
                 ...t,
                 status: newStatus as TabStatus,
                 // Clear activity when transitioning to idle (e.g., after warmup init)
-                ...(newStatus === 'idle' ? { currentActivity: '', permissionQueue: [] as import('../../shared/types').PermissionRequest[], permissionDenied: null } : {}),
+                ...(['idle', 'completed', 'failed', 'dead'].includes(newStatus) ? { activeRequestId: null, currentActivity: '', permissionQueue: [], inputRequests: [] } : {}),
+                ...(newStatus === 'idle' ? { permissionDenied: null, queuedPrompts: [], messages: t.messages.map(m => m.toolStatus === 'running' ? { ...m, toolStatus: 'error' as const } : m) } : {}),
               }
 
               if ((newStatus === 'failed' || newStatus === 'dead') && updated.compactionMessageId) {
@@ -1526,6 +1600,8 @@ export const useSessionStore = create<State>((set, get) => ({
           currentActivity: '',
           isCompacting: false,
           permissionQueue: [],
+          inputRequests: [],
+          queuedPrompts: [],
           messages: alreadyHasError
             ? updated.messages
             : [

@@ -11,13 +11,13 @@ if [ ! -d "node_modules" ]; then
   echo "    ./commands/setup.command"
   echo
   echo "  Or install manually:"
-  echo "    npm install"
+  echo "    npm install && npm run setup"
   echo
   exit 1
 fi
 
 # Clean stale PID file
-PID_FILE=".clui.pid"
+PID_FILE=".glui.pid"
 if [ -f "$PID_FILE" ]; then
   old_pid=$(cat "$PID_FILE" 2>/dev/null)
   if [ -n "$old_pid" ] && ! kill -0 "$old_pid" 2>/dev/null; then
@@ -25,16 +25,17 @@ if [ -f "$PID_FILE" ]; then
   fi
 fi
 
-echo "Building Clui..."
-if ! npx electron-vite build --mode production; then
+echo "Building the GLUI runtime and floating pill..."
+if ! npm run build; then
   echo
-  echo "Build failed. Try: rm -rf node_modules && npm install"
+  echo "Build failed. Try: npm install && npm run setup"
   exit 1
 fi
 
-echo "Clui running. ⌥ + Space to toggle. Use ./commands/stop.command or tray icon > Quit to close."
+echo "GLUI running. ⌥ + Space to toggle. Use ./commands/stop.command or tray icon > Quit to close."
 
 # Launch in a new process group and record the PID
+unset ELECTRON_RUN_AS_NODE
 npx electron . &
 APP_PID=$!
 echo "$APP_PID" > "$PID_FILE"

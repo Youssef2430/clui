@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Clui, please report it responsibly:
+If you discover a security vulnerability in GLUI, please report it responsibly:
 
 1. **Do not** open a public GitHub issue.
 2. Email the maintainer directly or use GitHub's private vulnerability reporting feature.
@@ -12,15 +12,15 @@ We will acknowledge receipt within 48 hours and aim to provide a fix or mitigati
 
 ## Security Architecture
 
-Clui runs entirely on your local machine. Key security properties:
+GLUI runs entirely on your local machine. Key security properties:
 
-- **No cloud backend** — all Claude Code interaction goes through the local `claude` CLI.
+- **No cloud backend** — agent interaction goes through the installed native CLI; Codex uses stdio and OpenCode uses an authenticated loopback server.
 - **No telemetry or analytics** — zero outbound data collection.
 - **Permission hook server** binds to `127.0.0.1:19836` only (not exposed to the network).
 - **Per-launch secrets** — the hook server uses a random UUID as app secret, regenerated on every launch.
 - **Sensitive field masking** — tool inputs containing tokens, passwords, keys, or credentials are masked before display in the renderer.
 - **CLAUDECODE env var** is explicitly removed from all spawned subprocesses to prevent credential leakage.
-- **Preload isolation** — the renderer has no direct access to Node.js APIs; all IPC goes through a typed `window.clui` bridge.
+- **Preload isolation** — the renderer has no direct access to Node.js APIs; all IPC goes through a typed `window.glui` bridge.
 
 ## Network Surface
 
@@ -30,7 +30,7 @@ Clui runs entirely on your local machine. Key security properties:
 | `raw.githubusercontent.com` | Outbound | Marketplace catalog fetch (optional) |
 | `api.github.com` | Outbound | Skill tarball download (optional, pinned SHA) |
 
-No other network connections are made by Clui itself. The `claude` CLI may make its own connections as part of normal operation.
+No other network connections are made by GLUI itself. The `claude` CLI may make its own connections as part of normal operation.
 
 ## Supported Versions
 

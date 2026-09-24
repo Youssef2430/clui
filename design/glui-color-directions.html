@@ -1,0 +1,66 @@
+<div id="glui-brand-preview" aria-label="GLUI appearance preview">
+  <style>
+    #glui-brand-preview{font-family:'Avenir Next',Avenir,system-ui,sans-serif;color:light-dark(#29171D,#FFF9F2);padding:8px 0}
+    #glui-brand-preview *{box-sizing:border-box}
+    #glui-brand-preview .gp-palettes{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+    #glui-brand-preview .gp-palette{font-family:inherit;font-size:12px;font-weight:500;color:inherit;background:transparent;border:1px solid currentColor;border-radius:8px;padding:9px 13px;opacity:.65}
+    #glui-brand-preview .gp-palette[aria-pressed=true]{opacity:1;background:light-dark(#F3E6D5,#39222B)}
+    #glui-brand-preview .gp-window{--gp-bg:#FFF9F2;--gp-panel:#F3E6D5;--gp-accent:#800020;--gp-rose:#D45060;--gp-text:#29171D;--gp-muted:#796166;--gp-border:#E8CCD0;--gp-on:#FFF9F2;color:var(--gp-text);background:var(--gp-bg);border:1px solid var(--gp-border);border-radius:21px;overflow:hidden;max-width:650px;margin:0 auto}
+    #glui-brand-preview .gp-bar{display:flex;gap:14px;align-items:center;padding:17px 21px;border-bottom:1px solid var(--gp-border);flex-wrap:wrap}
+    #glui-brand-preview .gp-wordmark{font-size:27px;font-weight:700;letter-spacing:-2px;color:var(--gp-accent)}
+    #glui-brand-preview .gp-wordmark span{color:var(--gp-rose)}
+    #glui-brand-preview select{border:1px solid var(--gp-border);border-radius:7px;padding:6px 8px;background:var(--gp-panel);color:var(--gp-text);font-family:inherit;font-size:12px}
+    #glui-brand-preview .gp-theme{margin-left:auto}
+    #glui-brand-preview .gp-chat{padding:25px 23px 30px}
+    #glui-brand-preview .gp-user{background:var(--gp-panel);border-radius:13px 13px 3px 13px;padding:15px 18px;margin:0 0 27px 42px;font-size:14px;line-height:1.6}
+    #glui-brand-preview .gp-name{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--gp-muted);margin-bottom:12px}
+    #glui-brand-preview .gp-dot{width:6px;height:6px;border-radius:50%;background:var(--gp-rose)}
+    #glui-brand-preview .gp-answer{font-size:16px;line-height:1.6;margin-bottom:21px}
+    #glui-brand-preview .gp-tool{background:var(--gp-panel);border-left:2px solid var(--gp-accent);padding:10px 13px;font:11px Menlo,monospace;color:var(--gp-muted)}
+    #glui-brand-preview .gp-compose{display:flex;gap:10px;align-items:center;margin:0 17px;padding:12px 14px;border:1px solid var(--gp-border);border-radius:12px;font-size:13px;color:var(--gp-muted)}
+    #glui-brand-preview .gp-compose span:first-child{flex:1}
+    #glui-brand-preview .gp-send{background:var(--gp-accent);color:var(--gp-on);padding:5px 10px;border-radius:7px}
+    #glui-brand-preview .gp-foot{padding:14px 22px;display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--gp-muted)}
+    #glui-brand-preview .gp-swatches{max-width:650px;margin:20px auto 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    #glui-brand-preview .gp-swatch{height:48px;border-radius:8px;margin-bottom:7px}
+    #glui-brand-preview .gp-hex{font:11px Menlo,monospace;opacity:.8}
+    #glui-brand-preview .gp-label{font-size:11px;opacity:.7;margin-top:4px}
+    @media(max-width:420px){#glui-brand-preview .gp-chat{padding:22px 17px}#glui-brand-preview .gp-user{margin-left:15px}#glui-brand-preview .gp-swatches{gap:7px}#glui-brand-preview .gp-bar{padding:14px;gap:10px}#glui-brand-preview .gp-palette{padding:8px 10px}}
+  </style>
+  <div class="gp-palettes" aria-label="Palette preview"></div>
+  <div class="gp-window" aria-label="GLUI conversation preview">
+    <div class="gp-bar"><span class="gp-wordmark">glui<span>.</span></span><select aria-label="Agent preview"><option>Codex</option><option>Claude Code</option><option>OpenCode</option></select><select class="gp-theme" aria-label="Appearance preview"><option value="light">Light</option><option value="dark">Dark</option></select></div>
+    <div class="gp-chat"><div class="gp-user">Bring all the good parts together.</div><div class="gp-name"><span class="gp-dot"></span><span class="gp-agent">Codex</span></div><div class="gp-answer">Same project. Fresh perspective.<br>Let’s make something that fits.</div><div class="gp-tool">✓ Connected to your local workspace</div></div>
+    <div class="gp-compose"><span>What should we build next?</span><span class="gp-send" aria-hidden="true">↑</span></div>
+    <div class="gp-foot"><span>~/your-next-idea</span><span>Ask · Native session</span></div>
+  </div>
+  <div class="gp-swatches" aria-label="Brand colors"></div>
+  <script>
+    (()=>{
+      const root=document.getElementById('glui-brand-preview');
+      const palettes={
+        burgundy:{name:'Burgundy · main',accent:'#800020',cream:'#F3E6D5',ivory:'#FFF9F2',rose:'#D45060',dark:'#29171D',surface:'#39222B',line:'#603C48',muted:'#CAAEB6',nightAccent:'#F39EAD'},
+        tidal:{name:'Tidal',accent:'#215E4B',cream:'#E3EBDF',ivory:'#F1F5EC',rose:'#A9EDC7',dark:'#102925',surface:'#1B3933',line:'#30544A',muted:'#A7BCB1'},
+        ember:{name:'Ember',accent:'#964725',cream:'#F2DECC',ivory:'#FBF1E7',rose:'#FFB38A',dark:'#2A211F',surface:'#3B2E29',line:'#5B4338',muted:'#C6AD9E'},
+        iris:{name:'Iris',accent:'#6352A3',cream:'#E3DFF0',ivory:'#F1F0FA',rose:'#C5BAFF',dark:'#202337',surface:'#2F334B',line:'#484E70',muted:'#B3B9D4'}
+      };
+      const saved=window.openai?.widgetState?.privateContent;
+      const state={palette:palettes[saved?.palette]?saved.palette:'burgundy',dark:saved?.dark===true};
+      function render(){
+        const p=palettes[state.palette],d=state.dark;
+        const tokens={bg:d?p.dark:p.ivory,panel:d?p.surface:p.cream,accent:d?(p.nightAccent||p.rose):p.accent,rose:p.rose,text:d?p.ivory:p.dark,muted:d?p.muted:'#796166',border:d?p.line:p.accent+'28',on:d?p.dark:p.ivory};
+        for(const [k,v] of Object.entries(tokens))root.querySelector('.gp-window').style.setProperty('--gp-'+k,v);
+        root.querySelectorAll('.gp-palette').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.palette===state.palette)));
+        root.querySelector('.gp-theme').value=d?'dark':'light';
+        root.querySelector('.gp-swatches').innerHTML=[['Burgundy / accent',p.accent],['Cream / surfaces',p.cream],['Ivory / canvas',p.ivory],['Rose / detail',p.rose]].map(([name,color],i)=>`<div><div class="gp-swatch" style="background:${color}"></div><div class="gp-hex">${color}</div><div class="gp-label">${state.palette==='burgundy'?name:['Accent','Surfaces','Canvas','Detail'][i]}</div></div>`).join('');
+      }
+      function save(){window.openai?.setWidgetState?.({modelContent:null,privateContent:state})?.catch(()=>{});}
+      for(const [id,p]of Object.entries(palettes)){const b=document.createElement('button');b.type='button';b.className='gp-palette cursor-interaction';b.dataset.palette=id;b.textContent=p.name;b.onclick=()=>{state.palette=id;render();save()};root.querySelector('.gp-palettes').append(b)}
+      root.querySelector('.gp-theme').onchange=e=>{state.dark=e.target.value==='dark';render();save()};
+      root.querySelector('[aria-label="Agent preview"]').onchange=e=>{root.querySelector('.gp-agent').textContent=e.target.value};
+      window.addEventListener('openai:set_globals',e=>{const s=e.detail?.globals?.widgetState?.privateContent;if(s&&palettes[s.palette]){state.palette=s.palette;state.dark=s.dark===true;render()}});
+      render();
+      if(globalThis.Tweak){const tweak=new Tweak({container:root.querySelector('.gp-window'),onChange:render});tweak.addSelect(state,'palette',{label:'Palette',options:Object.entries(palettes).map(([value,p])=>({value,label:p.name}))});tweak.addToggle(state,'dark',{label:'Dark appearance'});}
+    })();
+  </script>
+</div>

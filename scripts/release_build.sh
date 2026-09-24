@@ -60,10 +60,10 @@ else
 fi
 
 # ─── Build ────────────────────────────────────────────────────────────────────
-header "Building Clui v${VERSION}"
+header "Building GLUI v${VERSION}"
 
 info "Running electron-vite build + electron-builder..."
-npm run dist:dmg 2>&1 | while IFS= read -r line; do
+npm run dist:release 2>&1 | while IFS= read -r line; do
   # Surface key electron-builder status lines
   if echo "$line" | grep -qE '(signing|notariz|building|packaging|error|Error)'; then
     echo "  $line"
@@ -79,7 +79,7 @@ RELEASE_DIR="$PROJECT_ROOT/release"
 fatal_errors=0
 
 for arch_dir in mac-arm64 mac; do
-  app_path="$RELEASE_DIR/$arch_dir/Clui.app"
+  app_path="$RELEASE_DIR/$arch_dir/GLUI.app"
 
   if [ ! -d "$app_path" ]; then
     warn "Skipping $arch_dir (not found)"
@@ -148,7 +148,7 @@ done
 
 # ── Staple DMGs for current version (best-effort, not fatal) ──
 info "Checking DMGs..."
-for dmg in "$RELEASE_DIR"/Clui-"${VERSION}"*.dmg; do
+for dmg in "$RELEASE_DIR"/GLUI-"${VERSION}"*.dmg; do
   [ -f "$dmg" ] || continue
   dmg_name=$(basename "$dmg")
   staple_out=$(stapler validate "$dmg" 2>&1) || true
@@ -188,7 +188,7 @@ else
   info "Creating release ${TAG}..."
   gh release create "$TAG" \
     --repo "Youssef2430/clui" \
-    --title "Clui ${TAG}" \
+    --title "GLUI ${TAG}" \
     --generate-notes
   ok "Release ${TAG} created"
 fi
@@ -196,9 +196,9 @@ fi
 # Collect only current version's artifacts
 artifacts=()
 for f in \
-  "$RELEASE_DIR"/Clui-"${VERSION}"*.dmg \
-  "$RELEASE_DIR"/Clui-"${VERSION}"*-mac*.zip \
-  "$RELEASE_DIR"/Clui-"${VERSION}"*.blockmap \
+  "$RELEASE_DIR"/GLUI-"${VERSION}"*.dmg \
+  "$RELEASE_DIR"/GLUI-"${VERSION}"*.zip \
+  "$RELEASE_DIR"/GLUI-"${VERSION}"*.blockmap \
   "$RELEASE_DIR"/latest-mac.yml; do
   [ -f "$f" ] && artifacts+=("$f")
 done
@@ -223,7 +223,7 @@ GITHUB_TOKEN="${GH_TOKEN}" node "$PROJECT_ROOT/scripts/verify-update-feed.mjs" -
 
 # ─── Done ─────────────────────────────────────────────────────────────────────
 header "Done"
-echo -e "${GREEN}${BOLD}Clui v${VERSION} built, notarized, and published successfully!${NC}"
+echo -e "${GREEN}${BOLD}GLUI v${VERSION} built, notarized, and published successfully!${NC}"
 echo ""
 echo "  Release: https://github.com/Youssef2430/clui/releases/tag/v${VERSION}"
 echo ""

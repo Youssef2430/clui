@@ -31,7 +31,7 @@ function DotGridLoader({ progress, accent }: { progress: number; accent: string 
   const wrapRef = useRef<HTMLDivElement>(null)
   const targetRef = useRef(progress)
   const smoothRef = useRef(0)
-  const rafRef = useRef<ReturnType<typeof requestAnimationFrame>>()
+  const rafRef = useRef<ReturnType<typeof requestAnimationFrame> | undefined>(undefined)
   const kickRef = useRef<(() => void) | null>(null)
 
   // Keep target in sync and restart the rAF loop if it stopped
@@ -131,7 +131,7 @@ function DotGridLoader({ progress, accent }: { progress: number; accent: string 
   )
 }
 
-export function SearchPanel() {
+export function SearchPanel({ height = 470 }: { height?: number }) {
   const colors = useColors()
   const closeSearchPanel = useSessionStore((s) => s.closeSearchPanel)
   const indexStatus = useSessionStore((s) => s.searchIndexStatus)
@@ -142,7 +142,7 @@ export function SearchPanel() {
   const [hasSearched, setHasSearched] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const isMountedRef = useRef(true)
   const searchRequestIdRef = useRef(0)
 
@@ -175,7 +175,7 @@ export function SearchPanel() {
     setSearching(true)
 
     try {
-      const res = await window.clui.searchSessions(trimmedQuery)
+      const res = await window.glui.searchSessions(trimmedQuery, useSessionStore.getState().tabs.find(t => t.id === useSessionStore.getState().activeTabId)?.provider)
       if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return
       setResults(res)
       setHasSearched(true)
@@ -206,22 +206,23 @@ export function SearchPanel() {
 
   const handleResultClick = useCallback((result: SearchResult) => {
     const title = result.firstMessage?.substring(0, 30) || result.slug || 'Search Result'
-    useSessionStore.getState().resumeSession(result.sessionId, title, result.projectPath)
+    useSessionStore.getState().resumeSession(result.sessionId, title, result.projectPath, result.provider)
     closeSearchPanel()
   }, [closeSearchPanel])
 
-  const isDownloading = indexStatus.state === 'downloading'
-  const isIndexing = indexStatus.state === 'indexing'
-  const isError = indexStatus.state === 'error'
-  const isIdle = indexStatus.state === 'idle'
+  const provider = useSessionStore(s => s.tabs.find(t => t.id === s.activeTabId)?.provider)
+  const isDownloading = provider === 'claude' && indexStatus.state === 'downloading'
+  const isIndexing = provider === 'claude' && indexStatus.state === 'indexing'
+  const isError = provider === 'claude' && indexStatus.state === 'error'
+  const isIdle = provider === 'claude' && indexStatus.state === 'idle'
   const meaningful = results.filter((r) => r.score > 0.15)
 
   return (
     <div
-      data-clui-ui
+      data-glui-ui
       onKeyDown={handleKeyDown}
       style={{
-        height: 470,
+        height,
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -473,7 +474,7 @@ function ResultCard({ result, colors, index, onClick }: {
 }) {
   const [hovered, setHovered] = useState(false)
   const [tooltipVisible, setTooltipVisible] = useState(false)
-  const tooltipTimeout = useRef<ReturnType<typeof setTimeout>>()
+  const tooltipTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const scorePercent = Math.round(result.score * 100)
 
   // Derive a pill color from score

@@ -61,7 +61,7 @@ export default function Hero() {
         &nbsp;&nbsp;&middot;&nbsp;&nbsp;
         <span>macOS 13+ required</span>
         &nbsp;&nbsp;&middot;&nbsp;&nbsp;
-        <span>Requires Claude Code CLI</span>
+        <span>Claude Code · Codex · OpenCode</span>
       </p>
     </div>
   )

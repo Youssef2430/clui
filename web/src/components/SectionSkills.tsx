@@ -37,7 +37,7 @@ export default function SectionSkills() {
             <div className="section-label"><span className="section-index">03</span> Skills Marketplace</div>
             <h2 className="section-heading">Your workflows,<br />packaged as <em>skills</em>.</h2>
             <p className="section-sub">
-              Browse the community marketplace or author your own — without leaving Clui. Git flows,
+              Browse the community marketplace or author your own — without leaving GLUI. Git flows,
               code review, deploy scripts, test runners — all accessible as slash commands the moment
               they&apos;re installed.
             </p>
@@ -45,14 +45,14 @@ export default function SectionSkills() {
 
           <ScrollReveal delay={0.2}>
             <div className="split-visual">
-              {/* Faithful recreation of Clui's in-app MarketplacePanel */}
+              {/* Faithful recreation of GLUI's in-app MarketplacePanel */}
               <div className="mkt-panel app-glass">
                 <div className="mkt-header">
                   <div className="mkt-header-title">
                     <HeadCircuit size={20} />
                     <div>
                       <div className="mkt-title">Skills Marketplace</div>
-                      <div className="mkt-subtitle">Install skills and plugins without leaving Clui</div>
+                      <div className="mkt-subtitle">Install skills and plugins without leaving GLUI</div>
                     </div>
                   </div>
                   <div className="mkt-header-actions">

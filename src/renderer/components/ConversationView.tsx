@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react'
+import { AgentQuestionCard } from './AgentQuestionCard'
+import React, { useRef, useEffect, useLayoutEffect, useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -8,17 +9,22 @@ import remarkBreaks from 'remark-breaks'
 import {
   FileText, PencilSimple, FileArrowUp, Terminal, MagnifyingGlass, Globe,
   Robot, Question, Wrench, FolderOpen, Copy, Check, CaretRight, CaretDown,
-  SpinnerGap, ArrowCounterClockwise, Square,
+  SpinnerGap, ArrowCounterClockwise,
   Brain, Lightning, ChatDots, HardDrives, Plugs, Archive, CircleDashed, Cpu,
   CurrencyDollar, Clock, ArrowsClockwise, CoinVertical,
   CheckSquare, CheckCircle, Circle,
   File, Image as ImageIcon, FileCode, FolderSimple,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
+import { ContextDivider } from './ContextDivider'
+import { RunActivity } from './RunActivity'
+import { ToolDetails } from './ToolDetails'
+import { WebCitation } from './WebSources'
+import { citationRefs, copyWithWebCitations, remarkWebCitations } from '../lib/webCitations'
 import { PermissionCard } from './PermissionCard'
 import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { getFileIcon } from './FileMentionMenu'
-import { useColors, useThemeStore } from '../theme'
+import { useColors } from '../theme'
 import type { Message, Attachment } from '../../shared/types'
 
 // ─── Constants ───
@@ -28,6 +34,7 @@ const PAGE_SIZE = 100
 const REMARK_PLUGINS = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as any // Hoisted — prevents re-parse on every render
 const REMARK_PLUGINS_USER = [remarkGfm, [remarkMath, { singleDollarTextMath: false }], remarkBreaks] as any // User messages: also convert single newlines to <br>
 const REHYPE_PLUGINS = [rehypeKatex]
+const ASSISTANT_REMARK_PLUGINS = [...REMARK_PLUGINS, remarkWebCitations]
 
 // Minimal link override for Markdown surfaces without full markdownComponents:
 // prevents default <a> navigation (which would leave the Electron window)
@@ -37,7 +44,7 @@ const SAFE_LINK_COMPONENTS = {
     <button
       type="button"
       className="underline decoration-dotted underline-offset-2 cursor-pointer"
-      onClick={() => { if (href) window.clui.openExternal(String(href)) }}
+      onClick={() => { if (href) window.glui.openExternal(String(href)) }}
     >
       {children}
     </button>
@@ -81,30 +88,33 @@ function groupMessages(messages: Message[]): GroupedItem[] {
 
 // ─── Main Component ───
 
-export function ConversationView() {
+export function ConversationView({ height = 336 }: { height?: number }) {
   const tabs = useSessionStore((s) => s.tabs)
   const activeTabId = useSessionStore((s) => s.activeTabId)
   const sendMessage = useSessionStore((s) => s.sendMessage)
+  const loadEarlierHistory = useSessionStore((s) => s.loadEarlierHistory)
   const staticInfo = useSessionStore((s) => s.staticInfo)
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState(false)
   const [renderOffset, setRenderOffset] = useState(0) // 0 = show from tail
   const isNearBottomRef = useRef(true)
-  const prevTabIdRef = useRef(activeTabId)
+  const historyAnchorRef = useRef<{ conversation: string; messageId: string; top: number; firstMessageId: string } | null>(null)
   const colors = useColors()
-  const expandedUI = useThemeStore((s) => s.expandedUI)
 
   const tab = tabs.find((t) => t.id === activeTabId)
+  const conversation = `${activeTabId}:${tab?.providerSessionId ?? ''}`
+  const prevConversationRef = useRef(conversation)
 
   // Reset render offset and scroll state when switching tabs
   useEffect(() => {
-    if (activeTabId !== prevTabIdRef.current) {
-      prevTabIdRef.current = activeTabId
+    if (conversation !== prevConversationRef.current) {
+      prevConversationRef.current = conversation
       setRenderOffset(0)
       isNearBottomRef.current = true
+      historyAnchorRef.current = null
     }
-  }, [activeTabId])
+  }, [conversation])
 
   // Track whether user is scrolled near the bottom
   const handleScroll = useCallback(() => {
@@ -124,7 +134,7 @@ export function ConversationView() {
     if (isNearBottomRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [scrollTrigger])
+  }, [scrollTrigger, conversation])
 
   // Group only the visible slice of messages
   const allMessages = tab?.messages ?? []
@@ -140,9 +150,33 @@ export function ConversationView() {
 
   const hiddenCount = totalCount - visibleMessages.length
 
+  // Keep the same message in place when a page is prepended, even if a live
+  // response also grows at the bottom while the history request is in flight.
+  useLayoutEffect(() => {
+    const anchor = historyAnchorRef.current
+    const el = scrollRef.current
+    if (!anchor || !el) return
+    if (anchor.conversation !== conversation || tab?.historyError) { historyAnchorRef.current = null; return }
+    if (visibleMessages[0]?.id === anchor.firstMessageId) return
+    const message = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]')).find(node => node.dataset.messageId === anchor.messageId)
+    if (message) el.scrollTop += message.getBoundingClientRect().top - el.getBoundingClientRect().top - anchor.top
+    historyAnchorRef.current = null
+  }, [visibleMessages, conversation, tab?.historyError])
+
   const handleLoadOlder = useCallback(() => {
+    if (!tab || tab.historyLoading) return
+    const el = scrollRef.current
+    if (el) {
+      const top = el.getBoundingClientRect().top
+      const message = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]')).find(node => node.getBoundingClientRect().bottom > top)
+      if (message && visibleMessages[0]) historyAnchorRef.current = {
+        conversation, messageId: message.dataset.messageId!, top: message.getBoundingClientRect().top - top, firstMessageId: visibleMessages[0].id,
+      }
+    }
+    isNearBottomRef.current = false
     setRenderOffset((o) => o + 1)
-  }, [])
+    if (!hasOlder && tab.hasMoreHistory) void loadEarlierHistory(tab.id)
+  }, [tab, visibleMessages, conversation, hasOlder, loadEarlierHistory])
 
   if (!tab) return null
 
@@ -151,8 +185,8 @@ export function ConversationView() {
   const isFailed = tab.status === 'failed'
   const showInterrupt = isRunning && tab.messages.some((m) => m.role === 'user')
 
-  if (tab.messages.length === 0) {
-    return <EmptyState />
+  if (tab.messages.length === 0 && !tab.hasMoreHistory) {
+    return <div style={{ height, display: 'grid', placeItems: 'center' }}><EmptyState /></div>
   }
 
   // Messages from before initial render cap are "historical" — no motion
@@ -167,7 +201,7 @@ export function ConversationView() {
 
   return (
     <div
-      data-clui-ui
+      data-glui-ui
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -175,19 +209,24 @@ export function ConversationView() {
       <div
         ref={scrollRef}
         className="overflow-y-auto overflow-x-hidden px-4 pt-2 conversation-selectable"
-        style={{ maxHeight: expandedUI ? 460 : 336, paddingBottom: 28 }}
+        style={{ height, maxHeight: height, paddingBottom: 36 }}
         onScroll={handleScroll}
       >
         {/* Load older button */}
-        {hasOlder && (
-          <div className="flex justify-center py-2">
+        {(hasOlder || tab.hasMoreHistory) && (
+          <div className="flex flex-col items-center gap-1 py-2">
             <button
+              type="button"
               onClick={handleLoadOlder}
+              disabled={tab.historyLoading}
               className="text-[11px] px-3 py-1 rounded-full transition-colors"
               style={{ color: colors.textTertiary, border: `1px solid ${colors.toolBorder}` }}
             >
-              Load {Math.min(PAGE_SIZE, hiddenCount)} older messages ({hiddenCount} hidden)
+              {tab.historyLoading ? 'Loading older messages…' : hasOlder
+                ? `Load ${Math.min(PAGE_SIZE, hiddenCount)} older messages (${hiddenCount} hidden)`
+                : tab.historyError ? 'Retry loading older messages' : 'Load older messages'}
             </button>
+            {tab.historyError && <p role="alert" className="text-[11px] text-center" style={{ color: colors.statusError }}>{tab.historyError}</p>}
           </div>
         )}
 
@@ -198,13 +237,13 @@ export function ConversationView() {
 
             switch (item.kind) {
               case 'user':
-                return <UserMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
+                return <div key={item.message.id} data-message-id={item.message.id}><UserMessage message={item.message} skipMotion={isHistorical} /></div>
               case 'assistant':
-                return <AssistantMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
+                return <div key={item.message.id} data-message-id={item.message.id}><AssistantMessage message={item.message} skipMotion={isHistorical} /></div>
               case 'tool-group':
-                return <ToolGroup key={`tg-${item.messages[0].id}`} tools={item.messages} skipMotion={isHistorical} />
+                return <div key={`tg-${item.messages[0].id}`} data-message-id={item.messages[0].id}><ToolGroup tools={item.messages} skipMotion={isHistorical} /></div>
               case 'system':
-                return <SystemMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
+                return <div key={item.message.id} data-message-id={item.message.id}><SystemMessage message={item.message} skipMotion={isHistorical} /></div>
               default:
                 return null
             }
@@ -213,6 +252,7 @@ export function ConversationView() {
 
         {/* Permission card (shows first item from queue) */}
         <AnimatePresence>
+          {tab.inputRequests.map(request => <AgentQuestionCard key={request.questionId} tabId={tab.id} request={request} />)}
           {tab.permissionQueue.length > 0 && (
             <PermissionCard
               tabId={tab.id}
@@ -227,7 +267,7 @@ export function ConversationView() {
           {tab.permissionDenied && (
             <PermissionDeniedCard
               tools={tab.permissionDenied.tools}
-              sessionId={tab.claudeSessionId}
+              sessionId={tab.providerSessionId}
               projectPath={staticInfo?.projectPath || process.cwd()}
               onDismiss={() => {
                 useSessionStore.setState((s) => ({
@@ -254,26 +294,17 @@ export function ConversationView() {
       <div
         className="flex items-center justify-between px-4 relative"
         style={{
-          height: 28,
-          minHeight: 28,
-          marginTop: -28,
+          height: 36,
+          minHeight: 36,
+          marginTop: -36,
           background: `linear-gradient(to bottom, transparent, ${colors.containerBg} 70%)`,
           zIndex: 2,
         }}
       >
-        {/* Left: status indicator */}
+        <AnimatePresence initial={false}>
+          {isRunning && <RunActivity key={`${tab.id}:${tab.activeRequestId}`} tabId={tab.id} activity={tab.currentActivity} canInterrupt={showInterrupt} />}
+        </AnimatePresence>
         <div className="flex items-center gap-1.5 text-[11px] min-w-0">
-          {isRunning && (
-            <span className="flex items-center gap-1.5">
-              <span className="flex gap-[3px]">
-                <span className="w-[4px] h-[4px] rounded-full animate-bounce-dot" style={{ background: colors.statusRunning, animationDelay: '0ms' }} />
-                <span className="w-[4px] h-[4px] rounded-full animate-bounce-dot" style={{ background: colors.statusRunning, animationDelay: '150ms' }} />
-                <span className="w-[4px] h-[4px] rounded-full animate-bounce-dot" style={{ background: colors.statusRunning, animationDelay: '300ms' }} />
-              </span>
-              <span style={{ color: colors.textSecondary }}>{tab.currentActivity || 'Working...'}</span>
-            </span>
-          )}
-
           {isDead && (
             <span style={{ color: colors.statusError, fontSize: 11 }}>Session ended unexpectedly</span>
           )}
@@ -293,14 +324,6 @@ export function ConversationView() {
           )}
         </div>
 
-        {/* Right: interrupt button when running */}
-        <div className="flex items-center flex-shrink-0">
-          <AnimatePresence>
-            {showInterrupt && (
-              <InterruptButton tabId={tab.id} />
-            )}
-          </AnimatePresence>
-        </div>
       </div>
     </div>
   )
@@ -313,7 +336,7 @@ function EmptyState() {
   const colors = useColors()
 
   const handleChooseFolder = async () => {
-    const dir = await window.clui.selectDirectory()
+    const dir = await window.glui.selectDirectory()
     if (dir) {
       setBaseDirectory(dir)
     }
@@ -395,38 +418,6 @@ function CopyButtonWrapper({ messageId, children }: { messageId: string; childre
   )
 }
 
-// ─── Interrupt Button ───
-
-function InterruptButton({ tabId }: { tabId: string }) {
-  const colors = useColors()
-
-  const handleStop = () => {
-    window.clui.stopTab(tabId)
-  }
-
-  return (
-    <motion.button
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.12 }}
-      onClick={handleStop}
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] cursor-pointer flex-shrink-0 transition-colors"
-      style={{
-        background: 'transparent',
-        color: colors.statusError,
-        border: 'none',
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = colors.statusErrorBg }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-      title="Stop current task"
-    >
-      <Square size={9} weight="fill" />
-      <span>Interrupt</span>
-    </motion.button>
-  )
-}
-
 // ─── Attachment path prefix helpers ───
 
 /** Regex matching `[Attached image: /path]` or `[Attached file: /path]` lines injected by sendMessage */
@@ -481,9 +472,9 @@ function MessageAttachments({ attachments }: { attachments: Attachment[] }) {
     <div className="flex flex-wrap gap-1.5 pb-1.5">
       {attachments.map((a) => {
         // Resolve image source: prefer base64 dataUrl (instant), fall back to
-        // loading the file from disk via the clui-local:// custom protocol.
+        // loading the file from disk via the glui-local:// custom protocol.
         const imgSrc = a.dataUrl
-          || (a.type === 'image' ? `clui-local://${encodeURIComponent(a.path).replace(/%2F/g, '/')}` : undefined)
+          || (a.type === 'image' ? `glui-local://${encodeURIComponent(a.path).replace(/%2F/g, '/')}` : undefined)
 
         // Image attachments: just the thumbnail, no filename
         if (imgSrc) {
@@ -622,7 +613,7 @@ function UserMessage({ message, skipMotion }: { message: Message; skipMotion?: b
         type="button"
         className="underline decoration-dotted underline-offset-2 cursor-pointer"
         style={{ color: colors.accent }}
-        onClick={() => { if (href) window.clui.openExternal(String(href)) }}
+        onClick={() => { if (href) window.glui.openExternal(String(href)) }}
       >
         {children}
       </button>
@@ -765,7 +756,7 @@ function ImageCard({ src, alt, colors }: { src?: string; alt?: string; colors: R
   // Reset failed state when src changes (e.g. during streaming)
   useEffect(() => { setFailed(false) }, [src])
   const label = alt || 'Image'
-  const open = () => { if (src) window.clui.openExternal(String(src)) }
+  const open = () => { if (src) window.glui.openExternal(String(src)) }
 
   if (failed || !src) {
     return (
@@ -806,7 +797,7 @@ function ImageCard({ src, alt, colors }: { src?: string; alt?: string; colors: R
   )
 }
 
-// ─── Assistant Message (memoized — only re-renders when content changes) ───
+// ─── Assistant Message (memoized, including source metadata updates) ───
 
 const AssistantMessage = React.memo(function AssistantMessage({
   message,
@@ -819,25 +810,25 @@ const AssistantMessage = React.memo(function AssistantMessage({
 
   const markdownComponents = useMemo(() => ({
     table: ({ children }: any) => <TableScrollWrapper>{children}</TableScrollWrapper>,
-    a: ({ href, children }: any) => (
+    a: ({ href, children }: any) => citationRefs(href) ? <WebCitation refs={citationRefs(href)!} sources={message.sources} /> : (
       <button
         type="button"
         className="underline decoration-dotted underline-offset-2 cursor-pointer"
         style={{ color: colors.accent }}
         onClick={() => {
-          if (href) window.clui.openExternal(String(href))
+          if (href) window.glui.openExternal(String(href))
         }}
       >
         {children}
       </button>
     ),
     img: ({ src, alt }: any) => <ImageCard src={src} alt={alt} colors={colors} />,
-  }), [colors])
+  }), [colors, message.sources])
 
   const inner = (
     <div className="group/msg relative">
       <div className="text-[13px] leading-[1.6] prose-cloud min-w-0 max-w-[92%]">
-        <Markdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={markdownComponents}>
+        <Markdown remarkPlugins={ASSISTANT_REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={markdownComponents}>
           {message.content}
         </Markdown>
       </div>
@@ -845,7 +836,7 @@ const AssistantMessage = React.memo(function AssistantMessage({
           Absolute positioning so it never shifts the text layout. */}
       {message.content.trim() && (
         <CopyButtonWrapper messageId={message.id}>
-          <CopyButton text={message.content} messageId={message.id} />
+          <CopyButton text={copyWithWebCitations(message.content, message.sources)} messageId={message.id} />
         </CopyButtonWrapper>
       )}
     </div>
@@ -865,7 +856,7 @@ const AssistantMessage = React.memo(function AssistantMessage({
       {inner}
     </motion.div>
   )
-}, (prev, next) => prev.message.content === next.message.content && prev.skipMotion === next.skipMotion)
+}, (prev, next) => prev.message === next.message && prev.skipMotion === next.skipMotion)
 
 // ─── Tool Group (collapsible timeline — Claude Code style) ───
 
@@ -892,7 +883,7 @@ function getToolDescriptionFromParsed(name: string, parsed: Record<string, unkno
       const cmd = s(parsed.command)
       return cmd.length > 60 ? `${cmd.substring(0, 57)}...` : cmd || 'Bash'
     }
-    case 'WebSearch': return `Search: ${s(parsed.query) || s(parsed.search_query)}`
+    case 'WebSearch': return s(parsed.query) || s(parsed.search_query) ? `Search: ${s(parsed.query) || s(parsed.search_query)}` : 'Web search'
     case 'WebFetch': return `Fetch: ${s(parsed.url)}`
     case 'Agent': return `Agent: ${(s(parsed.prompt) || s(parsed.description)).substring(0, 50)}`
     case 'TodoWrite': {
@@ -901,7 +892,7 @@ function getToolDescriptionFromParsed(name: string, parsed: Record<string, unkno
       return `Update todos (${done}/${items.length} done)`
     }
     case 'TodoRead': return 'Read todos'
-    default: return name
+    default: return name.replace(/^mcp__/, '').replace(/__/g, ' · ').replace(/_/g, ' ')
   }
 }
 
@@ -952,8 +943,8 @@ function ToolResultAccordion({ tool }: { tool: Message }) {
       const tab = useSessionStore.getState().tabs.find((t) =>
         t.messages.some((m) => m.id === tool.id)
       )
-      if (tab?.claudeSessionId) {
-        const results = await window.clui.getToolResults(tab.claudeSessionId, tab.workingDirectory)
+      if (tab?.providerSessionId) {
+        const results = await window.glui.getToolResults(tab.providerSessionId, tab.workingDirectory, tab.provider)
         if (results[tool.toolId]) {
           useSessionStore.setState((s) => ({
             tabs: s.tabs.map((t) => ({
@@ -1162,7 +1153,7 @@ function ToolGroup({ tools, skipMotion }: { tools: Message[]; skipMotion?: boole
                     })()}
 
                     {/* Result accordion (shown both while running for agents, and after completion) */}
-                    {isRunning && toolName === 'Agent' ? (
+                    {tool.toolKind ? <ToolDetails tool={tool} /> : isRunning && toolName === 'Agent' ? (
                       <ToolResultAccordion tool={tool} />
                     ) : isRunning ? (
                       <span className="text-[10px] mt-0.5 block" style={{ color: colors.textMuted }}>
@@ -1235,6 +1226,8 @@ const LOCAL_COMMAND_PREFIX = '__LOCAL_COMMAND_DATA__'
 function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
   const colors = useColors()
 
+  if (message.contextChange) return <ContextDivider change={message.contextChange} />
+
   // Local command replay card
   const isLocalCommand = message.content.startsWith(LOCAL_COMMAND_PREFIX)
   if (isLocalCommand) {
@@ -1255,13 +1248,7 @@ function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?:
   if (isCompaction) {
     try {
       const parsed = JSON.parse(message.content.slice(COMPACTION_PREFIX.length))
-      const inner = <CompactionCard data={parsed} colors={colors} />
-      if (skipMotion) return <div className="py-1">{inner}</div>
-      return (
-        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="py-1">
-          {inner}
-        </motion.div>
-      )
+      return <ContextDivider change={{ kind: 'compaction', state: parsed.state || 'completed', summary: parsed.summary || parsed.message }} />
     } catch {}
   }
 
@@ -1432,91 +1419,6 @@ function LocalCommandCard({
           style={{ color: colors.textTertiary }}
         >
           {data.output}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CompactionCard({
-  data,
-  colors,
-}: {
-  data: {
-    state?: 'running' | 'completed' | 'failed'
-    message?: string
-    summary?: string
-    trigger?: string
-    compactedMessages?: number
-  }
-  colors: ReturnType<typeof useColors>
-}) {
-  const state = data.state || 'completed'
-  const isRunning = state === 'running'
-  const isFailed = state === 'failed'
-
-  const title = isRunning
-    ? 'Compacting conversation'
-    : isFailed
-      ? 'Compaction interrupted'
-      : 'Conversation compacted'
-
-  const detail = data.summary || data.message || title
-  const triggerLabel = data.trigger
-    ? (data.trigger === 'auto' ? 'automatic' : data.trigger)
-    : null
-  const compactedMessagesLabel = typeof data.compactedMessages === 'number'
-    ? `${data.compactedMessages} message${data.compactedMessages === 1 ? '' : 's'}`
-    : null
-
-  const icon = isRunning
-    ? <SpinnerGap size={12} className="animate-spin" style={{ color: colors.statusRunning }} />
-    : isFailed
-      ? <Archive size={12} style={{ color: colors.statusError }} />
-      : <Archive size={12} weight="fill" style={{ color: colors.accent }} />
-
-  return (
-    <div
-      className="inline-flex flex-col gap-1 px-3 py-2 rounded-xl max-w-full"
-      style={{
-        background: isFailed ? colors.statusErrorBg : colors.surfaceHover,
-        border: `1px solid ${isFailed ? colors.statusErrorBg : colors.toolBorder}`,
-      }}
-    >
-      <div className="flex items-center gap-2">
-        {icon}
-        <span
-          className="text-[11px] font-medium"
-          style={{ color: isFailed ? colors.statusError : colors.textSecondary }}
-        >
-          {title}
-        </span>
-      </div>
-      <div
-        className="text-[11px] leading-[1.5] whitespace-pre-wrap"
-        style={{ color: isFailed ? colors.statusError : colors.textTertiary }}
-      >
-        {detail}
-      </div>
-      {(triggerLabel || compactedMessagesLabel) && (
-        <div className="flex items-center gap-2 text-[10px]" style={{ color: colors.textMuted }}>
-          {triggerLabel && (
-            <span
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5"
-              style={{
-                background: isFailed ? colors.statusErrorBg : colors.surfaceSecondary,
-                color: isFailed ? colors.statusError : colors.textSecondary,
-              }}
-              title={`Trigger: ${triggerLabel}`}
-              aria-label={`Trigger: ${triggerLabel}`}
-            >
-              <Lightning size={10} weight="fill" />
-              <span>{triggerLabel}</span>
-            </span>
-          )}
-          {compactedMessagesLabel && (
-            <span>{compactedMessagesLabel}</span>
-          )}
         </div>
       )}
     </div>
@@ -1846,7 +1748,7 @@ function ContextCard({ data, colors }: { data: ContextData; colors: ReturnType<t
 // ─── Cost Card ───
 
 interface CostData {
-  cost: number
+  cost: number | null
   durationMs: number
   turns: number
   inputTokens: number
@@ -1859,7 +1761,7 @@ interface CostData {
 function CostCard({ data, colors }: { data: CostData; colors: ReturnType<typeof useColors> }) {
   const totalTokens = data.inputTokens + data.outputTokens + data.cacheRead + data.cacheCreate
   const durationSec = (data.durationMs / 1000).toFixed(1)
-  const costStr = data.cost < 0.01 ? `$${data.cost.toFixed(4)}` : `$${data.cost.toFixed(2)}`
+  const costStr = data.cost == null ? 'Not reported' : data.cost < 0.01 ? `$${data.cost.toFixed(4)}` : `$${data.cost.toFixed(2)}`
 
   return (
     <div

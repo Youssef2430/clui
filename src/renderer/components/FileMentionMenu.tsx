@@ -144,7 +144,7 @@ export const FileMentionMenu = forwardRef<FileMentionMenuHandle, Props>(
       const fullPath = dirPrefix
         ? `${basePath}/${dirPrefix}`.replace(/\/+$/, '')
         : basePath
-      window.clui.listDir(fullPath).then((result) => {
+      window.glui.listDir(fullPath).then((result) => {
         if (fetchIdRef.current !== id) return // stale response, ignore
         setEntries(result)
         setLoading(false)
@@ -193,7 +193,7 @@ export const FileMentionMenu = forwardRef<FileMentionMenuHandle, Props>(
 
     return createPortal(
       <motion.div
-        data-clui-ui
+        data-glui-ui
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 4 }}
@@ -207,7 +207,7 @@ export const FileMentionMenu = forwardRef<FileMentionMenuHandle, Props>(
         }}
       >
         <div
-          className="overflow-hidden rounded-xl flex flex-col"
+          className="glui-popover overflow-hidden rounded-xl flex flex-col"
           style={{
             maxHeight: 280,
             background: colors.popoverBg,

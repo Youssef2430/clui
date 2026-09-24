@@ -12,7 +12,7 @@ export default function SectionVoice() {
             <div className="section-label"><span className="section-index">04</span> Voice Input</div>
             <h2 className="section-heading">Speak your intent.<br />Claude <em>listens</em>.</h2>
             <p className="section-sub">
-              Tap the mic and dictate naturally. Clui transcribes locally, then drops the text
+              Tap the mic and dictate naturally. GLUI transcribes locally, then drops the text
               straight into the prompt — confirm with a tap, or cancel and try again. Ideal for
               long prompts, fast ideas, and hands-free workflows.
             </p>

@@ -13,7 +13,7 @@ import type {
 } from '../../shared/types'
 
 /**
- * Maps raw Claude stream-json events to canonical Clui events.
+ * Maps raw Claude stream-json events to canonical GLUI events.
  *
  * The normalizer is stateless — it takes one raw event and returns
  * zero or more normalized events. The caller (RunManager) is responsible

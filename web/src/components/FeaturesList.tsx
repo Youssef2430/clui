@@ -6,7 +6,7 @@ const FEATURES = [
       <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 4v16"/><path d="M2 9h6"/></svg>
     ),
     name: 'Multi-tab sessions',
-    desc: 'Run independent Claude conversations in parallel. Switch contexts instantly without losing any thread or history.',
+    desc: 'Run independent agent conversations in parallel. Switch contexts instantly without losing any thread or history.',
   },
   {
     icon: (
@@ -34,14 +34,14 @@ const FEATURES = [
       <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
     ),
     name: 'File & screenshot attach',
-    desc: 'Drag-drop files or capture a screen region directly into any message. Claude sees exactly what you see.',
+    desc: 'Drag-drop files or capture a screen region directly into any message. Your agent sees exactly what you see.',
   },
   {
     icon: (
       <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.5 0 2.91.37 4.16 1.02"/></svg>
     ),
     name: 'No API key needed',
-    desc: 'Clui uses your existing Claude Code CLI authentication. If Claude Code works, Clui works — immediately.',
+    desc: 'GLUI uses your existing Claude Code CLI authentication. If Claude Code works, GLUI works — immediately.',
   },
 ]
 

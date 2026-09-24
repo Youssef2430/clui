@@ -54,10 +54,13 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
     setResponded(false)
   }, [permission.questionId])
 
-  const handleOption = (optionId: string) => {
+  const [error, setError] = React.useState('')
+  const handleOption = async (optionId: string) => {
     if (responded) return // Prevent double-send
     setResponded(true)
-    respondPermission(tabId, permission.questionId, optionId)
+    setError('')
+    try { await respondPermission(tabId, permission.questionId, optionId) }
+    catch (error) { setError(String(error)); setResponded(false) }
   }
 
   const inputPreview = formatInput(permission.toolInput)
@@ -107,6 +110,7 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
             </p>
           )}
 
+          {error && <p role="alert" style={{ color: colors.statusError, fontSize: 11 }}>{error}</p>}
           {inputPreview && (
             <pre
               className="text-[10px] leading-[1.4] px-2 py-1.5 rounded-md overflow-x-auto whitespace-pre-wrap break-all mb-2"

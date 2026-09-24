@@ -1,5 +1,5 @@
 /**
- * Clui design tokens — copied from src/renderer/theme.ts
+ * GLUI design tokens — copied from src/renderer/theme.ts
  * These are the exact same tokens the Electron app uses at runtime.
  */
 
