@@ -50,7 +50,7 @@ export default function Home() {
             </div>
             <p className="hero-meta">
               Apple Silicon <span>·</span>{" "}
-              <a href="/download?arch=x64">Download for Intel</a> <span>·</span>{" "}
+              <a href="/download?arch=x64">Intel: legacy v0.1.17</a> <span>·</span>{" "}
               Free & open source
             </p>
           </div>

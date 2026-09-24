@@ -2701,7 +2701,14 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (!isDesktopPreviewVersion(version)) {
     const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
     if (publishConfig) {
-      buildConfig.publish = [publishConfig];
+      buildConfig.publish = [{
+        ...publishConfig,
+        // Legacy Clui clients share one feed across architectures. Keep that
+        // feed frozen and move supported GLUI Macs to their own channel.
+        ...(pillEntitlementsPath && platform === "mac" && arch === "arm64" && updateChannel === "latest"
+          ? { channel: "latest-arm64" }
+          : {}),
+      }];
     } else if (mockUpdates) {
       buildConfig.publish = [
         {

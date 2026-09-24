@@ -85,7 +85,7 @@ try {
     case 'release':
       await run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:overlay'], root)
       await pnpm('run', 'build:desktop')
-      for (const arch of action === 'release' ? ['arm64', 'x64'] : [process.arch]) {
+      for (const arch of action === 'release' ? ['arm64'] : [process.arch]) {
         await pnpm('exec', 'node', 'scripts/build-desktop-artifact.ts', '--platform', 'mac', '--target', 'dmg', '--arch', arch, '--build-version', version, '--output-dir', join(root, 'release'), '--skip-build', ...(action === 'release' ? ['--signed'] : []), ...extra)
       }
       if (action === 'release') await run(node, ['scripts/merge-update-feeds.mjs'], root)

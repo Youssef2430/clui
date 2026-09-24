@@ -78,7 +78,7 @@ header "Verifying notarization"
 RELEASE_DIR="$PROJECT_ROOT/release"
 fatal_errors=0
 
-for arch_dir in mac-arm64 mac; do
+for arch_dir in mac-arm64; do
   app_path="$RELEASE_DIR/$arch_dir/GLUI.app"
 
   if [ ! -d "$app_path" ]; then
@@ -171,7 +171,7 @@ fi
 # ─── Verify auto-update artifacts ────────────────────────────────────────────
 header "Verifying update artifacts"
 
-node "$PROJECT_ROOT/scripts/verify-update-artifacts.mjs" --require-both-archs \
+node "$PROJECT_ROOT/scripts/verify-update-artifacts.mjs" \
   || fail "Update artifact verification failed. Aborting publish."
 
 ok "All checks passed"
@@ -183,12 +183,16 @@ TAG="v${VERSION}"
 
 # Create the release if it doesn't exist yet
 if gh release view "$TAG" --repo "Youssef2430/clui" &>/dev/null; then
-  ok "Release ${TAG} already exists, will replace duplicate assets"
+  [ "$(gh release view "$TAG" --repo "Youssef2430/clui" --json isDraft --jq .isDraft)" = "true" ] \
+    || fail "Release ${TAG} is already public; bump the version before publishing."
+  ok "Draft ${TAG} already exists, will replace duplicate assets"
 else
   info "Creating release ${TAG}..."
   gh release create "$TAG" \
     --repo "Youssef2430/clui" \
     --title "GLUI ${TAG}" \
+    --draft --target "$(git rev-parse HEAD)" \
+    --notes "GLUI requires Apple Silicon. Intel support is deprecated; Clui v0.1.17 remains available. Existing Clui users on Apple Silicon must install GLUI from the DMG once; future updates are automatic." \
     --generate-notes
   ok "Release ${TAG} created"
 fi
@@ -196,9 +200,11 @@ fi
 # Collect only current version's artifacts
 artifacts=()
 for f in \
-  "$RELEASE_DIR"/GLUI-"${VERSION}"*.dmg \
-  "$RELEASE_DIR"/GLUI-"${VERSION}"*.zip \
-  "$RELEASE_DIR"/GLUI-"${VERSION}"*.blockmap \
+  "$RELEASE_DIR"/GLUI-"${VERSION}"-arm64.dmg \
+  "$RELEASE_DIR"/GLUI-"${VERSION}"-arm64.zip \
+  "$RELEASE_DIR"/GLUI-"${VERSION}"-arm64.*.blockmap \
+  "$RELEASE_DIR"/Clui-0.1.17*-mac.zip \
+  "$RELEASE_DIR"/latest-arm64-mac.yml \
   "$RELEASE_DIR"/latest-mac.yml; do
   [ -f "$f" ] && artifacts+=("$f")
 done
@@ -212,6 +218,8 @@ gh release upload "$TAG" \
   --repo "Youssef2430/clui" \
   --clobber \
   "${artifacts[@]}"
+
+gh release edit "$TAG" --repo "Youssef2430/clui" --draft=false --latest
 
 ok "Published to GitHub"
 

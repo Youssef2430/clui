@@ -369,6 +369,24 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect("separates supported GLUI Macs from the frozen legacy update feed", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac", "dmg", "0.2.0", true, false, undefined, undefined,
+        false, "arm64", "/tmp/pill-entitlements.plist",
+      );
+      assert.deepStrictEqual(config.publish, [{
+        provider: "github", owner: "Youssef2430", repo: "clui",
+        releaseType: "release", channel: "latest-arm64",
+      }]);
+      const mac = config.mac as Record<string, unknown>;
+      assert.equal(mac.entitlements, "/tmp/pill-entitlements.plist");
+      assert.equal(mac.entitlementsInherit, "/tmp/pill-entitlements.plist");
+    }).pipe(Effect.provide(ConfigProvider.layer(
+      ConfigProvider.fromEnv({ env: { GITHUB_REPOSITORY: "Youssef2430/clui" } }),
+    ))),
+  );
+
   it("stages only the desktop main-process externals", () => {
     assert.deepStrictEqual(
       resolveDesktopRuntimeDependencies(

@@ -1,6 +1,7 @@
 import {
   findMacDownload,
   LATEST_RELEASE_API,
+  LEGACY_INTEL_DOWNLOAD_URL,
   RELEASES_URL,
 } from "../../lib/releases";
 
@@ -9,6 +10,13 @@ export async function GET(request: Request) {
   if (architecture !== "arm64" && architecture !== "x64") {
     return new Response("Choose Apple Silicon (arm64) or Intel (x64).", {
       status: 400,
+    });
+  }
+
+  if (architecture === "x64") {
+    return new Response(null, {
+      status: 307,
+      headers: { Location: LEGACY_INTEL_DOWNLOAD_URL, "Cache-Control": "no-store" },
     });
   }
 

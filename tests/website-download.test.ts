@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { GET } from '../web/src/app/download/route'
-import { findMacDownload, RELEASES_URL } from '../web/src/lib/releases'
+import { findMacDownload, RELEASES_URL, LEGACY_INTEL_DOWNLOAD_URL } from '../web/src/lib/releases'
 
 const asset = (name: string) => ({
   name,
@@ -87,15 +87,15 @@ test('download requests follow newly published versions without a website deploy
   )
 })
 
-test('Intel requests redirect to the Intel DMG', async (t) => {
-  const intel = asset('GLUI-0.2.0-x64.dmg')
-  t.mock.method(globalThis, 'fetch', async () =>
-    Response.json({ assets: [asset('GLUI-0.2.0-arm64.dmg'), intel] }),
-  )
+test('Intel requests stay on the deprecated release without querying latest', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('Intel must not follow new releases')
+  })
   const response = await GET(
     new Request('https://glui.example/download?arch=x64'),
   )
-  assert.equal(response.headers.get('location'), intel.browser_download_url)
+  assert.equal(response.headers.get('location'), LEGACY_INTEL_DOWNLOAD_URL)
+  assert.equal(fetchMock.mock.callCount(), 0)
 })
 
 test('API failures and missing assets fall back to the latest release page', async (t) => {

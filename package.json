@@ -86,7 +86,8 @@
     "publish": {
       "provider": "github",
       "owner": "Youssef2430",
-      "repo": "clui"
+      "repo": "clui",
+      "channel": "latest-arm64"
     },
     "mac": {
       "icon": "resources/icon.icns",
@@ -94,15 +95,13 @@
         {
           "target": "dmg",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         },
         {
           "target": "zip",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         }
       ],

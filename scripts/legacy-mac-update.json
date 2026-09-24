@@ -1,0 +1,16 @@
+{
+  "version": "0.1.17",
+  "releaseDate": "2026-06-12T15:35:30.979Z",
+  "files": [
+    {
+      "url": "Clui-0.1.17-mac.zip",
+      "sha512": "tOTXLkGgCfm+xon9oScavqNJilh9TansD9Mmz2da5pUBq7qSBOqBqt1+ixB6U5WN/h3QQwoJjkS4iOIYI2UspQ==",
+      "size": 187729584
+    },
+    {
+      "url": "Clui-0.1.17-arm64-mac.zip",
+      "sha512": "bK9goPMMn6MzzUxLsq2nWLbiH21B4UfWjkA4l34tmvWDWiYaEzEW31mrLoEtuj9sRvzZdjvOS+XZYdlZFOZGMQ==",
+      "size": 181766922
+    }
+  ]
+}

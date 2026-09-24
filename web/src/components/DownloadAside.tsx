@@ -84,15 +84,17 @@ export default function DownloadAside({ arm64Url, x64Url }: Props) {
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             <span className="download-link-info">
-              <span className="download-link-name">Intel</span>
-              <span className="download-link-arch">x86_64</span>
+              <span className="download-link-name">Intel — deprecated</span>
+              <span className="download-link-arch">Clui v0.1.17 · legacy download</span>
             </span>
             {arch === 'x64' && <span className="download-badge">Your Mac</span>}
           </a>
         </div>
 
         <p className="download-aside-note">
-          Not sure? Apple menu → About This Mac.
+          GLUI updates require Apple Silicon. Intel support ends with Clui v0.1.17.
+          Upgrading from Clui on Apple Silicon? Install GLUI once from the DMG;
+          future updates are automatic. Quit Clui before opening GLUI.
         </p>
       </div>
     </ScrollReveal>
