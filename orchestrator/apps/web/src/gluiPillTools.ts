@@ -1,6 +1,6 @@
 import type { OrchestrationV2TurnItem } from "@t3tools/contracts";
 import type { PillMessage } from "@t3tools/shared/gluiPill";
-import { readWebSources } from "../../../packages/shared/src/webSearchSources";
+import { readWebSources } from "@t3tools/shared/webSearchSources";
 
 function outputText(value: unknown): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;

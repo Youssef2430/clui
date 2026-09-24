@@ -373,7 +373,7 @@
     },
     "./webSearchSources": {
       "types": "./src/webSearchSources.ts",
-      "import": "./src/webSearchSources.ts"
+      "default": "./src/webSearchSources.ts"
     },
     "./gluiPill": {
       "types": "./src/gluiPill.ts",
