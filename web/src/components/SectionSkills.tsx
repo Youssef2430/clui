@@ -21,7 +21,7 @@ const PLUGINS = [
     tags: ['review'],
     name: 'code-review',
     desc: 'Inline review with severity scoring, runs against your working diff.',
-    repo: 'clui/skills',
+    repo: 'glui/skills',
     author: 'youssef',
     version: '0.4.1',
     installed: true,

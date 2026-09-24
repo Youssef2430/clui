@@ -13,16 +13,16 @@ type Step =
   | { kind: 'blank' }
 
 const SEQUENCE: Step[] = [
-  { kind: 'command', text: 'brew tap Youssef2430/clui' },
-  { kind: 'output', html: '<span class="term-info">==></span> Tapping Youssef2430/clui...', delay: 480 },
-  { kind: 'output', html: '<span class="term-success">✓</span> <span class="term-info">Tapped 1 cask (Youssef2430/clui/clui)</span>', delay: 560 },
+  { kind: 'command', text: 'brew tap Youssef2430/glui' },
+  { kind: 'output', html: '<span class="term-info">==></span> Tapping Youssef2430/glui...', delay: 480 },
+  { kind: 'output', html: '<span class="term-success">✓</span> <span class="term-info">Tapped 1 cask (Youssef2430/glui/glui)</span>', delay: 560 },
   { kind: 'blank' },
-  { kind: 'command', text: 'brew install --cask clui' },
+  { kind: 'command', text: 'brew install --cask glui' },
   { kind: 'output', html: '<span class="term-info">==></span> Downloading GLUI.dmg...', delay: 520 },
   { kind: 'output', html: '<span class="term-info">######################################## 100.0%</span>', delay: 900 },
-  { kind: 'output', html: '<span class="term-info">==></span> Installing Cask clui', delay: 520 },
+  { kind: 'output', html: '<span class="term-info">==></span> Installing Cask glui', delay: 520 },
   { kind: 'output', html: "<span class=\"term-info\">==></span> Moving App 'GLUI.app' to '/Applications/GLUI.app'", delay: 460 },
-  { kind: 'output', html: '<span class="term-success">✓</span> clui was successfully installed!', delay: 420 },
+  { kind: 'output', html: '<span class="term-success">✓</span> glui was successfully installed!', delay: 420 },
   { kind: 'blank' },
   { kind: 'command', text: 'open -a GLUI' },
   { kind: 'output', html: '<span class="term-success">✓</span> GLUI is running · Press <span class="term-cmd">⌥ Space</span> to summon', delay: 620 },

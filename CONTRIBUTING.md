@@ -7,8 +7,8 @@ Thanks for your interest in contributing! GLUI is a desktop overlay for Claude C
 1. Make sure you have the [prerequisites](README.md#run-locally) installed (macOS, Xcode CLT, Node.js 22+, and an authenticated Claude Code, Codex, or OpenCode CLI)
 2. Fork and clone the repo:
    ```bash
-   git clone https://github.com/<your-username>/clui.git
-   cd clui
+   git clone https://github.com/<your-username>/glui.git
+   cd glui
    ```
 3. Check your environment (optional but recommended):
    ```bash

@@ -19,7 +19,7 @@ export default function Callout() {
                 </svg>
                 Install free
               </a>
-              <a href="https://github.com/Youssef2430/clui" target="_blank" rel="noopener" className="btn-ghost">
+              <a href="https://github.com/Youssef2430/glui" target="_blank" rel="noopener" className="btn-ghost">
                 Star on GitHub ↗
               </a>
             </div>

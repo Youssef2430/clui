@@ -18,7 +18,7 @@ export default function Footer() {
           {["GitHub", "Releases", "Issues"].map((label, i) => (
             <a
               key={label}
-              href={`https://github.com/Youssef2430/clui${["", "/releases", "/issues"][i]}`}
+              href={`https://github.com/Youssef2430/glui${["", "/releases", "/issues"][i]}`}
               target="_blank"
               rel="noreferrer"
             >

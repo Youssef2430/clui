@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Youssef2430/clui.git"
+    "url": "https://github.com/Youssef2430/glui.git"
   },
   "bugs": {
-    "url": "https://github.com/Youssef2430/clui/issues"
+    "url": "https://github.com/Youssef2430/glui/issues"
   },
-  "homepage": "https://github.com/Youssef2430/clui#readme",
+  "homepage": "https://github.com/Youssef2430/glui#readme",
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "npm run build:workspace && npm run dev:overlay",
@@ -86,7 +86,7 @@
     "publish": {
       "provider": "github",
       "owner": "Youssef2430",
-      "repo": "clui",
+      "repo": "glui",
       "channel": "latest-arm64"
     },
     "mac": {

@@ -71,7 +71,7 @@ export default function AgentShowcase() {
             <div className="demo-window-actions">
               <a
                 className="demo-icon"
-                href="https://github.com/Youssef2430/clui#conversations"
+                href="https://github.com/Youssef2430/glui#conversations"
                 aria-label="Learn about opening sessions in your CLI"
                 title="Open in CLI — available in the app"
                 target="_blank"

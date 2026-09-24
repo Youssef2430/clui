@@ -41,7 +41,7 @@ export default function Home() {
               </a>
               <a
                 className="text-link"
-                href="https://github.com/Youssef2430/clui"
+                href="https://github.com/Youssef2430/glui"
                 target="_blank"
                 rel="noreferrer"
               >

@@ -34,7 +34,7 @@ export default function Nav() {
           <a href="#agents">Agents</a>
           <a href="#features">The experience</a>
           <a
-            href="https://github.com/Youssef2430/clui"
+            href="https://github.com/Youssef2430/glui"
             target="_blank"
             rel="noreferrer"
           >

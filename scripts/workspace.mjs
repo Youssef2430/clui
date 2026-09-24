@@ -19,7 +19,7 @@ env.T3CODE_HOME = env.GLUI_HOME
 env.T3CODE_COMMIT_HASH = '5ccb2a5268f68a018b172f1eb672cdb74499a5dd'
 env.T3CODE_WEB_SOURCEMAP = '0'
 env.npm_config_verify_deps_before_run = 'false'
-env.GITHUB_REPOSITORY = 'Youssef2430/clui'
+env.GITHUB_REPOSITORY = 'Youssef2430/glui'
 env.GLUI_PILL_ROOT = root
 
 // Prefer an installed Node 24 LTS when the host agent runs a different Node.

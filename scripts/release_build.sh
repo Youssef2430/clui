@@ -182,14 +182,14 @@ header "Publishing to GitHub"
 TAG="v${VERSION}"
 
 # Create the release if it doesn't exist yet
-if gh release view "$TAG" --repo "Youssef2430/clui" &>/dev/null; then
-  [ "$(gh release view "$TAG" --repo "Youssef2430/clui" --json isDraft --jq .isDraft)" = "true" ] \
+if gh release view "$TAG" --repo "Youssef2430/glui" &>/dev/null; then
+  [ "$(gh release view "$TAG" --repo "Youssef2430/glui" --json isDraft --jq .isDraft)" = "true" ] \
     || fail "Release ${TAG} is already public; bump the version before publishing."
   ok "Draft ${TAG} already exists, will replace duplicate assets"
 else
   info "Creating release ${TAG}..."
   gh release create "$TAG" \
-    --repo "Youssef2430/clui" \
+    --repo "Youssef2430/glui" \
     --title "GLUI ${TAG}" \
     --draft --target "$(git rev-parse HEAD)" \
     --notes "GLUI requires Apple Silicon. Intel support is deprecated; Clui v0.1.17 remains available. Existing Clui users on Apple Silicon must install GLUI from the DMG once; future updates are automatic." \
@@ -215,11 +215,11 @@ fi
 
 info "Uploading ${#artifacts[@]} artifact(s)..."
 gh release upload "$TAG" \
-  --repo "Youssef2430/clui" \
+  --repo "Youssef2430/glui" \
   --clobber \
   "${artifacts[@]}"
 
-gh release edit "$TAG" --repo "Youssef2430/clui" --draft=false --latest
+gh release edit "$TAG" --repo "Youssef2430/glui" --draft=false --latest
 
 ok "Published to GitHub"
 
@@ -233,5 +233,5 @@ GITHUB_TOKEN="${GH_TOKEN}" node "$PROJECT_ROOT/scripts/verify-update-feed.mjs" -
 header "Done"
 echo -e "${GREEN}${BOLD}GLUI v${VERSION} built, notarized, and published successfully!${NC}"
 echo ""
-echo "  Release: https://github.com/Youssef2430/clui/releases/tag/v${VERSION}"
+echo "  Release: https://github.com/Youssef2430/glui/releases/tag/v${VERSION}"
 echo ""

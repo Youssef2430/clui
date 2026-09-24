@@ -376,14 +376,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         false, "arm64", "/tmp/pill-entitlements.plist",
       );
       assert.deepStrictEqual(config.publish, [{
-        provider: "github", owner: "Youssef2430", repo: "clui",
+        provider: "github", owner: "Youssef2430", repo: "glui",
         releaseType: "release", channel: "latest-arm64",
       }]);
       const mac = config.mac as Record<string, unknown>;
       assert.equal(mac.entitlements, "/tmp/pill-entitlements.plist");
       assert.equal(mac.entitlementsInherit, "/tmp/pill-entitlements.plist");
     }).pipe(Effect.provide(ConfigProvider.layer(
-      ConfigProvider.fromEnv({ env: { GITHUB_REPOSITORY: "Youssef2430/clui" } }),
+      ConfigProvider.fromEnv({ env: { GITHUB_REPOSITORY: "Youssef2430/glui" } }),
     ))),
   );
 

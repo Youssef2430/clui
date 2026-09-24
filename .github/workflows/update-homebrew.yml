@@ -56,36 +56,37 @@ jobs:
           echo "arm64=${arm64_sha}" >> "$GITHUB_OUTPUT"
           echo "intel=${intel_sha}" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout homebrew-clui
+      - name: Checkout homebrew-glui
         uses: actions/checkout@v5
         with:
-          repository: Youssef2430/homebrew-clui
+          repository: Youssef2430/homebrew-glui
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: Update cask
         run: |
-          cat > Casks/clui.rb << 'CASK'
-          cask "clui" do
+          cat > Casks/glui.rb << 'CASK'
+          cask "glui" do
             on_arm do
               version "${{ steps.version.outputs.version }}"
               sha256 "${{ steps.sha.outputs.arm64 }}"
-              url "https://github.com/Youssef2430/clui/releases/download/v#{version}/GLUI-#{version}-arm64.dmg"
+              url "https://github.com/Youssef2430/glui/releases/download/v#{version}/GLUI-#{version}-arm64.dmg"
               app "GLUI.app"
             end
 
             on_intel do
               version "0.1.17"
               sha256 "${{ steps.sha.outputs.intel }}"
-              url "https://github.com/Youssef2430/clui/releases/download/v#{version}/Clui-#{version}.dmg"
+              url "https://github.com/Youssef2430/glui/releases/download/v#{version}/Clui-#{version}.dmg"
               app "Clui.app"
               caveats "Intel support is deprecated. Clui v0.1.17 is the final Intel release."
             end
 
             name "GLUI"
             desc "Desktop UI for Claude Code, Codex, and OpenCode"
-            homepage "https://github.com/Youssef2430/clui"
+            homepage "https://github.com/Youssef2430/glui"
 
-            depends_on macos: ">= :ventura"
+            depends_on macos: :ventura
+            conflicts_with cask: "clui"
 
             zap trash: [
               "~/Library/Application Support/clui",
@@ -95,16 +96,20 @@ jobs:
           end
           CASK
           # Remove leading whitespace from heredoc
-          sed -i 's/^          //' Casks/clui.rb
+          sed -i 's/^          //' Casks/glui.rb
+          # Keep existing installations on the old token working.
+          sed -e 's/cask "glui" do/cask "clui" do/' \
+              -e 's/conflicts_with cask: "clui"/conflicts_with cask: "glui"/' \
+              Casks/glui.rb > Casks/clui.rb
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/clui.rb
+          git add Casks/clui.rb Casks/glui.rb
           if git diff --staged --quiet; then
             echo "Cask already up to date — nothing to commit"
           else
-            git commit -m "update clui to ${{ steps.version.outputs.version }}"
+            git commit -m "update glui to ${{ steps.version.outputs.version }}"
             git push
           fi

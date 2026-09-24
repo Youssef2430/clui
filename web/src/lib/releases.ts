@@ -1,7 +1,7 @@
-export const RELEASES_URL = "https://github.com/Youssef2430/clui/releases";
+export const RELEASES_URL = "https://github.com/Youssef2430/glui/releases";
 export const LEGACY_INTEL_DOWNLOAD_URL = `${RELEASES_URL}/download/v0.1.17/Clui-0.1.17.dmg`;
 export const LATEST_RELEASE_API =
-  "https://api.github.com/repos/Youssef2430/clui/releases/latest";
+  "https://api.github.com/repos/Youssef2430/glui/releases/latest";
 
 export type MacArchitecture = "arm64" | "x64";
 

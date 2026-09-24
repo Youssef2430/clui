@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Logo from "./Logo";
 import { Icon } from "./Icon";
 const commands =
-  "git clone https://github.com/Youssef2430/clui.git\ncd clui\nnpm install\nnpm run setup\nnpm run dev";
+  "git clone https://github.com/Youssef2430/glui.git\ncd glui\nnpm install\nnpm run setup\nnpm run dev";
 export default function Install() {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -68,7 +68,7 @@ export default function Install() {
             <i />
           </span>
           <span className="source-title">
-            <Icon name="terminal" size={13} /> clui — zsh
+            <Icon name="terminal" size={13} /> glui — zsh
           </span>
           <button
             className="copy-button"
@@ -86,7 +86,7 @@ export default function Install() {
               <span className="code-line" key={line}>
                 <span className="shell-command">
                   <span className="shell-prompt" aria-hidden="true">
-                    {i < 2 ? "~" : "clui"} <span>%</span>
+                    {i < 2 ? "~" : "glui"} <span>%</span>
                   </span>{" "}
                   <span>
                     <span className="shell-executable">
@@ -97,7 +97,7 @@ export default function Install() {
                 </span>
                 {i === 0 && (
                   <span className="shell-output">
-                    Cloning into &apos;clui&apos;…
+                    Cloning into &apos;glui&apos;…
                   </span>
                 )}
                 {i === 2 && (
@@ -132,7 +132,7 @@ export default function Install() {
           <p>
             Requires Node.js 24.13.1+, Rust 1.95+, and Xcode command line tools.{" "}
             <a
-              href="https://github.com/Youssef2430/clui#run-locally"
+              href="https://github.com/Youssef2430/glui#run-locally"
               target="_blank"
               rel="noreferrer"
             >

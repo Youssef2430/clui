@@ -4,7 +4,7 @@ Claude Code, Codex, and OpenCode in a floating macOS pill. GLUI combines streami
 
 GLUI builds on [Clui CC](https://github.com/lcoutodemos/clui-cc) by Lucas Couto and [T3 Code](https://github.com/pingdotgg/t3code) by T3 Tools Inc. and its contributors. These two projects provide the foundations for GLUI's floating interface and orchestration runtime. See [credits and license](#credits-and-license).
 
-**Mac support:** GLUI v0.2.0 and later require Apple Silicon. Intel support is deprecated; [Clui v0.1.17 for Intel](https://github.com/Youssef2430/clui/releases/download/v0.1.17/Clui-0.1.17.dmg) remains available as the final Intel version. Intel installations stay on v0.1.17.
+**Mac support:** GLUI v0.2.0 and later require Apple Silicon. Intel support is deprecated; [Clui v0.1.17 for Intel](https://github.com/Youssef2430/glui/releases/download/v0.1.17/Clui-0.1.17.dmg) remains available as the final Intel version. Intel installations stay on v0.1.17.
 
 The floating pill is the interface. Its slim composer shelf holds the folder, agent/model, reasoning, access level, and current Git branch. **Liquid Glass** is the default theme: native macOS glass with black (`#0A0A0A`) and white (`#FDFDFD`) tints and Burgundy, rose, cream, and ivory accents. The rounded input keeps its small settings bar attached underneath. macOS 26+ uses Liquid Glass; older macOS versions use native frosted material. Drag the top-right resize handle to adjust the panel; double-click it to reset. **Burgundy** and **Tidal** complete the three-theme collection. All three support light, dark, and system appearance.
 
@@ -23,13 +23,22 @@ GLUI exposes Claude Code, Codex, and OpenCode through the pill. See the [feature
 
 The skills.sh-inspired directory offers searchable skills from public repositories. **Add** installs a full skill folder once and links it into available compatible agents. Installed rows show the linked providers; **Remove** removes only GLUI-managed links and files. Existing skills are preserved. Native provider plugins and hooks retain their own configuration.
 
+## Install with Homebrew
+
+```sh
+brew tap Youssef2430/glui
+brew install --cask glui
+```
+
+The legacy `clui` cask remains available for existing installations. Both casks keep Intel Macs on Clui v0.1.17.
+
 ## Run locally
 
 Requires macOS 13+, Node.js 24.13.1+, Rust 1.95+ for the bundled native workspace component, Xcode Command Line Tools, and at least one authenticated agent CLI.
 
 ```sh
-git clone https://github.com/Youssef2430/clui.git
-cd clui
+git clone https://github.com/Youssef2430/glui.git
+cd glui
 npm install
 npm run setup
 npm run dev
@@ -62,9 +71,9 @@ Releases are built and published locally with `bash scripts/release_build.sh`. I
 
 ## Migration
 
-On Apple Silicon, quit Clui and install [GLUI from the latest DMG](https://github.com/Youssef2430/clui/releases/latest) once. Open GLUI, then remove the old Clui app from Applications. Preferences are preserved. Future GLUI updates are automatic. The legacy Clui update feed stays at v0.1.17 because it cannot distinguish supported Apple Silicon Macs from deprecated Intel Macs.
+On Apple Silicon, quit Clui and install [GLUI from the latest DMG](https://github.com/Youssef2430/glui/releases/latest) once. Open GLUI, then remove the old Clui app from Applications. Preferences are preserved. Future GLUI updates are automatic. The legacy Clui update feed stays at v0.1.17 because it cannot distinguish supported Apple Silicon Macs from deprecated Intel Macs.
 
-GLUI continues this fork of [Lucas Couto's Clui CC](https://github.com/lcoutodemos/clui-cc). The existing bundle identifier and release repository remain stable. Existing appearance preferences are preserved; Burgundy is the default for a fresh profile. CLI histories and credentials remain in their original locations. New orchestration state lives in `~/.glui`, separately from T3 Code.
+GLUI continues this fork of [Lucas Couto's Clui CC](https://github.com/lcoutodemos/clui-cc). The bundle identifier remains stable. The repository is now `Youssef2430/glui`; old repository and update links redirect to it. Existing appearance preferences are preserved; Burgundy is the default for a fresh profile. CLI histories and credentials remain in their original locations. New orchestration state lives in `~/.glui`, separately from T3 Code.
 
 See [architecture](docs/ARCHITECTURE.md) and [verification](docs/glui-transition.md).
 
