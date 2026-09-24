@@ -227,6 +227,9 @@ export interface TabState {
   permissionDenied: { tools: Array<{ toolName: string; toolUseId: string }> } | null
   attachments: Attachment[]
   messages: Message[]
+  hasMoreHistory: boolean
+  historyLoading: boolean
+  historyError: string | null
   title: string
   /** Last run's result data (cost, tokens, duration) */
   lastResult: RunResult | null
@@ -479,6 +482,7 @@ export const IPC = {
   ATTACH_THREAD: 'glui:attach-thread',
   FORK_THREAD: 'glui:fork-thread',
   WORKSPACE_HISTORY: 'glui:workspace-history',
+  LOAD_EARLIER_HISTORY: 'glui:load-earlier-history',
   LIST_PROVIDERS: 'glui:list-providers',
   SET_PROVIDER: 'glui:set-provider',
   RESPOND_INPUT: 'glui:respond-input',

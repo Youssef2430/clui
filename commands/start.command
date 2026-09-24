@@ -11,7 +11,7 @@ if [ ! -d "node_modules" ]; then
   echo "    ./commands/setup.command"
   echo
   echo "  Or install manually:"
-  echo "    npm install"
+  echo "    npm install && npm run setup"
   echo
   exit 1
 fi
@@ -25,16 +25,17 @@ if [ -f "$PID_FILE" ]; then
   fi
 fi
 
-echo "Building GLUI..."
-if ! npx electron-vite build --mode production; then
+echo "Building the GLUI runtime and floating pill..."
+if ! npm run build; then
   echo
-  echo "Build failed. Try: rm -rf node_modules && npm install"
+  echo "Build failed. Try: npm install && npm run setup"
   exit 1
 fi
 
 echo "GLUI running. ⌥ + Space to toggle. Use ./commands/stop.command or tray icon > Quit to close."
 
 # Launch in a new process group and record the PID
+unset ELECTRON_RUN_AS_NODE
 npx electron . &
 APP_PID=$!
 echo "$APP_PID" > "$PID_FILE"

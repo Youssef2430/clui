@@ -195,6 +195,12 @@ export function installGluiPillBridge(): () => void {
     const threadId = ThreadId.make(action.threadId);
     if (action.type === "unwatch") { watches.get(threadId)?.dispose(); watches.delete(threadId); return; }
     if (action.type === "watch") return watch(environmentId, threadId);
+    if (action.type === "load-earlier") {
+      await watch(environmentId, threadId);
+      const result = await run(threadEnvironment.loadEarlierHistory, { environmentId, input: { threadId } });
+      if (result._tag === "error") throw new Error(result.message);
+      return;
+    }
     if (action.type === "select") return dispatch({ type: "thread.model-selection.set", commandId: commandId(), threadId, modelSelection: selection(action.provider, action.model) });
     if (action.type === "respond") return dispatch({ type: "runtime-request.respond", commandId: commandId(), threadId, requestId: RuntimeRequestId.make(action.requestId), ...(action.decision ? { decision: Schema.decodeUnknownSync(ProviderApprovalDecision)(action.decision) } : { answers: action.answers ?? {} }) });
     if (action.type === "fork") {

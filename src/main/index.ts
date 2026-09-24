@@ -846,6 +846,7 @@ controlPlane.on('snapshot', (tabId, snapshot) => broadcast(IPC.THREAD_SNAPSHOT, 
 ipcMain.handle(IPC.ATTACH_THREAD, (_event, { tabId, sessionId }) => controlPlane.attach(tabId, sessionId))
 ipcMain.handle(IPC.FORK_THREAD, (_event, tabId: string) => controlPlane.fork(tabId))
 ipcMain.handle(IPC.WORKSPACE_HISTORY, (_event, provider?: ProviderId, projectPath?: string) => controlPlane.listSessions(provider, projectPath))
+ipcMain.handle(IPC.LOAD_EARLIER_HISTORY, (_event, tabId: string) => controlPlane.loadEarlierHistory(tabId))
 
 // ─── IPC Handlers (typed, strict) ───
 

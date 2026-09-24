@@ -58,6 +58,20 @@ test('a workspace restart resubscribes open durable threads', async () => {
   assert.deepEqual(host.actions, [{ type: 'watch', threadId: 'thread-1' }])
 })
 
+test('history pages follow the attached thread and survive a failed request', async () => {
+  const { plane, host } = setup()
+  const tab = plane.createTab('codex')
+  await assert.rejects(plane.loadEarlierHistory(tab), /saved conversation/)
+  await plane.attach(tab, 'glui:saved-thread')
+  const request = host.request.bind(host)
+  host.request = async () => { throw new Error('Disconnected') }
+  await assert.rejects(plane.loadEarlierHistory(tab), /Disconnected/)
+  assert.equal(plane.getTabStatus(tab)?.providerSessionId, 'glui:saved-thread')
+  host.request = request
+  await plane.loadEarlierHistory(tab)
+  assert.deepEqual(host.actions.at(-1), { type: 'load-earlier', threadId: 'saved-thread' })
+})
+
 test('reasoning and access selections reach the canonical workspace command', async () => {
   const { plane, host } = setup()
   const tab = plane.createTab('codex')

@@ -2,6 +2,8 @@
 
 Claude Code, Codex, and OpenCode in a floating macOS pill. GLUI combines streaming conversations, approvals, attachments, local voice input, and a shared skills directory with a persistent Orchestrator V2 runtime.
 
+GLUI builds on [Clui CC](https://github.com/lcoutodemos/clui-cc) by Lucas Couto and [T3 Code](https://github.com/pingdotgg/t3code) by T3 Tools Inc. and its contributors. These two projects provide the foundations for GLUI's floating interface and orchestration runtime. See [credits and license](#credits-and-license).
+
 The floating pill is the interface. Its slim composer shelf holds the folder, agent/model, reasoning, access level, and current Git branch. **Liquid Glass** is the default theme: native macOS glass with black (`#0A0A0A`) and white (`#FDFDFD`) tints and Burgundy, rose, cream, and ivory accents. The rounded input keeps its small settings bar attached underneath. macOS 26+ uses Liquid Glass; older macOS versions use native frosted material. Drag the top-right resize handle to adjust the panel; double-click it to reset. **Burgundy** and **Tidal** complete the three-theme collection. All three support light, dark, and system appearance.
 
 ## Conversations
@@ -13,7 +15,7 @@ The floating pill is the interface. Its slim composer shelf holds the folder, ag
 - Conversations, queued prompts, and execution state persist across restarts. The runtime stays connected while the pill is hidden.
 - `⌥ Space` toggles the pill (fallback `⌘⇧K`). Voice transcription stays local.
 
-The background runtime bundles [T3 Code Orchestrator V2](https://github.com/pingdotgg/t3code/pull/2829) at the revision in [UPSTREAM.json](orchestrator/UPSTREAM.json), under its original MIT license. GLUI exposes Claude Code, Codex, and OpenCode through the pill. See the [feature map](docs/orchestrator-v2-audit.md).
+GLUI exposes Claude Code, Codex, and OpenCode through the pill. See the [feature map](docs/orchestrator-v2-audit.md).
 
 ## Skills
 
@@ -54,8 +56,19 @@ GLUI uses existing CLI authentication. Models remain subject to the connected ac
 
 Release packaging requires Developer ID and Apple notarization credentials. Building does not publish a GitHub release.
 
+Releases are built and published locally with `bash scripts/release_build.sh`. Before building both Mac architectures, install their Rust targets with `rustup target add aarch64-apple-darwin x86_64-apple-darwin`. The Homebrew workflow updates the tap after a release is published.
+
 ## Migration
 
 GLUI continues this fork of [Lucas Couto's Clui CC](https://github.com/lcoutodemos/clui-cc). The existing bundle identifier and release repository remain stable. Existing appearance preferences are preserved; Burgundy is the default for a fresh profile. CLI histories and credentials remain in their original locations. New orchestration state lives in `~/.glui`, separately from T3 Code.
 
 See [architecture](docs/ARCHITECTURE.md) and [verification](docs/glui-transition.md).
+
+## Credits and license
+
+GLUI is made possible by two upstream projects:
+
+- **[Clui CC](https://github.com/lcoutodemos/clui-cc)** by **[Lucas Couto](https://github.com/lcoutodemos)** supplies the original macOS floating overlay, Claude Code interface, and desktop interaction foundation. GLUI continues this fork of Clui CC. Original code: Copyright (c) 2025-2026 Lucas Couto, under the [MIT license](https://github.com/lcoutodemos/clui-cc/blob/main/LICENSE).
+- **[T3 Code](https://github.com/pingdotgg/t3code)** by **T3 Tools Inc. and contributors** supplies the [Orchestrator V2](https://github.com/pingdotgg/t3code/pull/2829) runtime, including provider adapters, durable conversations, context handoffs, branching, and persistence. The bundled source lives in [`orchestrator/`](orchestrator/), with its pinned revision recorded in [`UPSTREAM.json`](orchestrator/UPSTREAM.json). Original code: Copyright (c) 2026 T3 Tools Inc., with its original [MIT license](orchestrator/LICENSE) preserved.
+
+GLUI's integration and additional changes are maintained by Youssef Chouay. GLUI is distributed under the [MIT license](LICENSE), which retains both upstream copyright notices alongside the existing notice for this fork.

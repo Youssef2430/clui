@@ -73,6 +73,11 @@ export class ControlPlane extends EventEmitter {
     const existing = this.snapshots.get(tab.threadId)
     if (existing) this.emit('snapshot', id, existing)
   }
+  async loadEarlierHistory(id: string) {
+    const tab = this.requireTab(id)
+    if (!tab.established) throw new Error('Open a saved conversation before loading earlier messages')
+    await this.host.request({ type: 'load-earlier', threadId: tab.threadId })
+  }
   submitPrompt(id: string, requestId: string, options: RunOptions): Promise<void> {
     const tab = this.requireTab(id)
     if (!requestId || !options.prompt.trim()) return Promise.reject(new Error('A request ID and prompt are required'))

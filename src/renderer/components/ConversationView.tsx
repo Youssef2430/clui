@@ -1,5 +1,5 @@
 import { AgentQuestionCard } from './AgentQuestionCard'
-import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react'
+import React, { useRef, useEffect, useLayoutEffect, useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -92,25 +92,29 @@ export function ConversationView({ height = 336 }: { height?: number }) {
   const tabs = useSessionStore((s) => s.tabs)
   const activeTabId = useSessionStore((s) => s.activeTabId)
   const sendMessage = useSessionStore((s) => s.sendMessage)
+  const loadEarlierHistory = useSessionStore((s) => s.loadEarlierHistory)
   const staticInfo = useSessionStore((s) => s.staticInfo)
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState(false)
   const [renderOffset, setRenderOffset] = useState(0) // 0 = show from tail
   const isNearBottomRef = useRef(true)
-  const prevTabIdRef = useRef(activeTabId)
+  const historyAnchorRef = useRef<{ conversation: string; messageId: string; top: number; firstMessageId: string } | null>(null)
   const colors = useColors()
 
   const tab = tabs.find((t) => t.id === activeTabId)
+  const conversation = `${activeTabId}:${tab?.providerSessionId ?? ''}`
+  const prevConversationRef = useRef(conversation)
 
   // Reset render offset and scroll state when switching tabs
   useEffect(() => {
-    if (activeTabId !== prevTabIdRef.current) {
-      prevTabIdRef.current = activeTabId
+    if (conversation !== prevConversationRef.current) {
+      prevConversationRef.current = conversation
       setRenderOffset(0)
       isNearBottomRef.current = true
+      historyAnchorRef.current = null
     }
-  }, [activeTabId])
+  }, [conversation])
 
   // Track whether user is scrolled near the bottom
   const handleScroll = useCallback(() => {
@@ -130,7 +134,7 @@ export function ConversationView({ height = 336 }: { height?: number }) {
     if (isNearBottomRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [scrollTrigger])
+  }, [scrollTrigger, conversation])
 
   // Group only the visible slice of messages
   const allMessages = tab?.messages ?? []
@@ -146,9 +150,33 @@ export function ConversationView({ height = 336 }: { height?: number }) {
 
   const hiddenCount = totalCount - visibleMessages.length
 
+  // Keep the same message in place when a page is prepended, even if a live
+  // response also grows at the bottom while the history request is in flight.
+  useLayoutEffect(() => {
+    const anchor = historyAnchorRef.current
+    const el = scrollRef.current
+    if (!anchor || !el) return
+    if (anchor.conversation !== conversation || tab?.historyError) { historyAnchorRef.current = null; return }
+    if (visibleMessages[0]?.id === anchor.firstMessageId) return
+    const message = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]')).find(node => node.dataset.messageId === anchor.messageId)
+    if (message) el.scrollTop += message.getBoundingClientRect().top - el.getBoundingClientRect().top - anchor.top
+    historyAnchorRef.current = null
+  }, [visibleMessages, conversation, tab?.historyError])
+
   const handleLoadOlder = useCallback(() => {
+    if (!tab || tab.historyLoading) return
+    const el = scrollRef.current
+    if (el) {
+      const top = el.getBoundingClientRect().top
+      const message = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]')).find(node => node.getBoundingClientRect().bottom > top)
+      if (message && visibleMessages[0]) historyAnchorRef.current = {
+        conversation, messageId: message.dataset.messageId!, top: message.getBoundingClientRect().top - top, firstMessageId: visibleMessages[0].id,
+      }
+    }
+    isNearBottomRef.current = false
     setRenderOffset((o) => o + 1)
-  }, [])
+    if (!hasOlder && tab.hasMoreHistory) void loadEarlierHistory(tab.id)
+  }, [tab, visibleMessages, conversation, hasOlder, loadEarlierHistory])
 
   if (!tab) return null
 
@@ -157,7 +185,7 @@ export function ConversationView({ height = 336 }: { height?: number }) {
   const isFailed = tab.status === 'failed'
   const showInterrupt = isRunning && tab.messages.some((m) => m.role === 'user')
 
-  if (tab.messages.length === 0) {
+  if (tab.messages.length === 0 && !tab.hasMoreHistory) {
     return <div style={{ height, display: 'grid', placeItems: 'center' }}><EmptyState /></div>
   }
 
@@ -185,15 +213,20 @@ export function ConversationView({ height = 336 }: { height?: number }) {
         onScroll={handleScroll}
       >
         {/* Load older button */}
-        {hasOlder && (
-          <div className="flex justify-center py-2">
+        {(hasOlder || tab.hasMoreHistory) && (
+          <div className="flex flex-col items-center gap-1 py-2">
             <button
+              type="button"
               onClick={handleLoadOlder}
+              disabled={tab.historyLoading}
               className="text-[11px] px-3 py-1 rounded-full transition-colors"
               style={{ color: colors.textTertiary, border: `1px solid ${colors.toolBorder}` }}
             >
-              Load {Math.min(PAGE_SIZE, hiddenCount)} older messages ({hiddenCount} hidden)
+              {tab.historyLoading ? 'Loading older messages…' : hasOlder
+                ? `Load ${Math.min(PAGE_SIZE, hiddenCount)} older messages (${hiddenCount} hidden)`
+                : tab.historyError ? 'Retry loading older messages' : 'Load older messages'}
             </button>
+            {tab.historyError && <p role="alert" className="text-[11px] text-center" style={{ color: colors.statusError }}>{tab.historyError}</p>}
           </div>
         )}
 
@@ -204,13 +237,13 @@ export function ConversationView({ height = 336 }: { height?: number }) {
 
             switch (item.kind) {
               case 'user':
-                return <UserMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
+                return <div key={item.message.id} data-message-id={item.message.id}><UserMessage message={item.message} skipMotion={isHistorical} /></div>
               case 'assistant':
-                return <AssistantMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
+                return <div key={item.message.id} data-message-id={item.message.id}><AssistantMessage message={item.message} skipMotion={isHistorical} /></div>
               case 'tool-group':
-                return <ToolGroup key={`tg-${item.messages[0].id}`} tools={item.messages} skipMotion={isHistorical} />
+                return <div key={`tg-${item.messages[0].id}`} data-message-id={item.messages[0].id}><ToolGroup tools={item.messages} skipMotion={isHistorical} /></div>
               case 'system':
-                return <SystemMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
+                return <div key={item.message.id} data-message-id={item.message.id}><SystemMessage message={item.message} skipMotion={isHistorical} /></div>
               default:
                 return null
             }

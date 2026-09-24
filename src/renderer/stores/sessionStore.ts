@@ -44,6 +44,7 @@ interface StaticInfo {
 interface State {
   providers: ProviderInfo[]
   applyThreadSnapshot: (tabId: string, snapshot: PillThread) => void
+  loadEarlierHistory: (tabId: string) => Promise<void>
   forkThread: () => Promise<void>
   refreshProviders: () => Promise<void>
   setProvider: (provider: ProviderId) => Promise<void>
@@ -260,6 +261,9 @@ function makeLocalTab(provider: ProviderId = loadDefaultProvider()): TabState {
     permissionDenied: null,
     attachments: [],
     messages: [],
+    hasMoreHistory: false,
+    historyLoading: false,
+    historyError: null,
     title: 'New Tab',
     lastResult: null,
     sessionModel: null,
@@ -357,11 +361,26 @@ export const useSessionStore = create<State>((set, get) => ({
       ...t, provider: snapshot.provider, providerSessionId: `glui:${snapshot.threadId}`,
       title: snapshot.title, sessionModel: snapshot.model, modelOptions: t.modelOptions ?? snapshot.modelOptions, runtimeMode: t.runtimeMode ?? snapshot.runtimeMode, status: snapshot.status,
       workingDirectory: snapshot.workspaceRoot || t.workingDirectory,
-      activeRequestId: snapshot.activeRequestId, messages,
+      activeRequestId: snapshot.activeRequestId, messages, hasMoreHistory: snapshot.hasMoreHistory,
       permissionQueue: snapshot.permissions, inputRequests: snapshot.questions,
       queuedPrompts: snapshot.queuedPrompts, currentActivity: snapshot.status === 'running' ? 'Working…' : snapshot.status === 'connecting' ? 'Starting…' : '',
       hasUnread: t.id !== s.activeTabId && snapshot.status === 'completed' ? true : t.hasUnread,
     } : t) }))
+  },
+  loadEarlierHistory: async (tabId) => {
+    const tab = get().tabs.find(t => t.id === tabId)
+    if (!tab?.providerSessionId?.startsWith('glui:') || !tab.hasMoreHistory || tab.historyLoading) return
+    const sessionId = tab.providerSessionId
+    const update = (fields: Pick<TabState, 'historyLoading' | 'historyError'>) => {
+      set(s => ({ tabs: s.tabs.map(t => t.id === tabId && t.providerSessionId === sessionId ? { ...t, ...fields } : t) }))
+    }
+    update({ historyLoading: true, historyError: null })
+    try {
+      await window.glui.loadEarlierHistory(tabId)
+      update({ historyLoading: false, historyError: null })
+    } catch (error) {
+      update({ historyLoading: false, historyError: error instanceof Error ? error.message : String(error) })
+    }
   },
   forkThread: async () => {
     const current = get().tabs.find(t => t.id === get().activeTabId)
@@ -762,6 +781,9 @@ export const useSessionStore = create<State>((set, get) => ({
           ? {
               ...t,
               messages: [],
+              hasMoreHistory: false,
+              historyLoading: false,
+              historyError: null,
               providerSessionId: null,
               inputRequests: [],
               lastResult: null,

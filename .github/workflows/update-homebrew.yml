@@ -1,10 +1,7 @@
 name: Update Homebrew Tap
 
-# Two triggers on purpose:
-#  - release published: covers releases made locally via release_build.sh
-#  - workflow_dispatch: covers releases made by the release.yml workflow,
-#    whose GITHUB_TOKEN-created release does NOT fire the release event
-#    (GitHub anti-recursion rule), so release.yml dispatches this directly.
+# Update the tap after a locally published release. Manual dispatch allows
+# retrying a tap update for an existing release.
 on:
   release:
     types: [published]

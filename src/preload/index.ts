@@ -26,6 +26,7 @@ export interface GLUIAPI {
   attachThread(tabId: string, sessionId: string): Promise<void>
   forkThread(tabId: string): Promise<{ tabId: string; sessionId: string; provider: ProviderId; projectPath: string }>
   workspaceHistory(provider?: ProviderId, projectPath?: string): Promise<SessionMeta[]>
+  loadEarlierHistory(tabId: string): Promise<void>
   onThreadSnapshot(callback: (tabId: string, snapshot: PillThread) => void): () => void
   // ─── Request-response (renderer → main) ───
   listProviders(): Promise<ProviderInfo[]>
@@ -115,6 +116,7 @@ const api: GLUIAPI = {
   attachThread: (tabId, sessionId) => ipcRenderer.invoke(IPC.ATTACH_THREAD, { tabId, sessionId }),
   forkThread: (tabId) => ipcRenderer.invoke(IPC.FORK_THREAD, tabId),
   workspaceHistory: (provider, projectPath) => ipcRenderer.invoke(IPC.WORKSPACE_HISTORY, provider, projectPath),
+  loadEarlierHistory: (tabId) => ipcRenderer.invoke(IPC.LOAD_EARLIER_HISTORY, tabId),
   onThreadSnapshot: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, tabId: string, snapshot: PillThread) => callback(tabId, snapshot)
     ipcRenderer.on(IPC.THREAD_SNAPSHOT, listener)

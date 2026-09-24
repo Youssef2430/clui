@@ -78,6 +78,7 @@ export type PillAction =
   | { type: "catalog"; provider: PillProvider }
   | { type: "prompt"; threadId: string; requestId: string; provider: PillProvider; model?: string; modelOptions?: PillModelOptions; runtimeMode?: PillRuntimeMode; projectPath: string; prompt: string; permissionMode: "ask" | "auto"; nativeSessionId?: string; attachments?: Array<{ id: string; type: "image" | "file"; name: string; mimeType?: string; dataUrl: string; size?: number }> }
   | { type: "watch" | "unwatch" | "stop" | "history"; threadId?: string }
+  | { type: "load-earlier"; threadId: string }
   | { type: "select"; threadId: string; provider: PillProvider; model?: string }
   | { type: "respond"; threadId: string; requestId: string; decision?: string; answers?: Record<string, unknown> }
   | { type: "fork"; threadId: string; targetThreadId: string; runId: string }

@@ -136,6 +136,64 @@ try {
   assert.equal(await page.locator('body').innerText().then(text => /[\uE200\uE201\uE202]|No result data available|web_search/.test(text)), false)
   await page.screenshot({ path: join(profile, 'pill-tools-citations.png') })
   console.log('PASS: search details, real source-link destination, literal command output, no legacy result lookup, citation metadata updates, honest missing-source fallback')
+  // Reopened history starts with ten turns. The IPC fixture controls page
+  // receipts so loading, retry, and scroll retention are tested without agents.
+  const historyMessages = Array.from({ length: 31 }, (_, index) => [
+    { id: `history-user-${index + 1}`, role: 'user', content: `History question ${index + 1}`, timestamp: index * 2 },
+    { id: `history-answer-${index + 1}`, role: 'assistant', content: `History answer ${index + 1}`, timestamp: index * 2 + 1 },
+  ]).flat()
+  snapshot.threadId = 'history-fixture'
+  snapshot.messages = historyMessages.slice(-20)
+  snapshot.hasMoreHistory = true
+  await app.evaluate(({ ipcMain }) => {
+    globalThis.historyCalls = []
+    ipcMain.removeHandler('glui:load-earlier-history')
+    ipcMain.handle('glui:load-earlier-history', (_event, id) => {
+      globalThis.historyCalls.push(id)
+      return new Promise((resolve, reject) => { globalThis.resolveHistory = resolve; globalThis.rejectHistory = reject })
+    })
+  })
+  await emit()
+  const transcript = page.locator('.conversation-selectable')
+  await transcript.evaluate(el => { el.scrollTop = 0 })
+  await expect(page.getByText('History question 1', { exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Load older messages', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Loading older messages…', exact: true })).toBeDisabled()
+  assert.deepEqual(await app.evaluate(() => globalThis.historyCalls), [tabId])
+  await app.evaluate(() => globalThis.rejectHistory(new Error('History temporarily unavailable')))
+  await expect(page.getByRole('alert')).toContainText('History temporarily unavailable')
+  await expect(page.getByText('History question 22', { exact: true })).toHaveCount(1)
+  const retained = page.locator('[data-message-id="history-user-22"]')
+  const anchorTop = await retained.evaluate(el => el.getBoundingClientRect().top)
+  await page.getByRole('button', { name: 'Retry loading older messages', exact: true }).click()
+  snapshot.messages = historyMessages.slice(2)
+  await emit()
+  await app.evaluate(() => globalThis.resolveHistory())
+  await expect(transcript.locator('[data-message-id]')).toHaveCount(60)
+  assert.ok(Math.abs(await retained.evaluate(el => el.getBoundingClientRect().top) - anchorTop) < 3, 'Prepending history retains the reading position')
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await transcript.evaluate(el => { el.scrollTop = 0 })
+  await page.getByRole('button', { name: 'Load older messages', exact: true }).click()
+  snapshot.messages = historyMessages
+  snapshot.hasMoreHistory = false
+  await emit()
+  await app.evaluate(() => globalThis.resolveHistory())
+  await expect(transcript.locator('[data-message-id]')).toHaveCount(62)
+  await expect(page.getByText('History question 1', { exact: true })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /older messages/ })).toHaveCount(0)
+  assert.deepEqual(await app.evaluate(() => globalThis.historyCalls), [tabId, tabId, tabId])
+  await transcript.evaluate(el => { el.scrollTop = 0 })
+  await page.screenshot({ path: join(profile, 'pill-older-history.png') })
+  // A long transcript already in memory still expands locally, without IPC.
+  snapshot.threadId = 'cached-history-fixture'
+  snapshot.messages = Array.from({ length: 120 }, (_, index) => ({ id: `cached-${index}`, role: 'user', content: `Cached message ${index}`, timestamp: index }))
+  await emit()
+  await expect(transcript.locator('[data-message-id]')).toHaveCount(100)
+  await transcript.evaluate(el => { el.scrollTop = 0 })
+  await page.getByRole('button', { name: 'Load 20 older messages (20 hidden)', exact: true }).click()
+  await expect(transcript.locator('[data-message-id]')).toHaveCount(120)
+  assert.equal(await app.evaluate(() => globalThis.historyCalls.length), 3)
+  console.log('PASS: paginated history, loading acknowledgement, retry, stable reading position, complete transcript without duplicates, cached history expansion')
   // Return to the activity fixture for reduced-motion and narrow-pill checks.
   snapshot.status = 'running'
   snapshot.activeRequestId = 'run-3'
