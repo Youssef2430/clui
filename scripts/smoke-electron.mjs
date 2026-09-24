@@ -1,4 +1,4 @@
-import { _electron as electron } from '@playwright/test'
+import { _electron as electron, expect } from '@playwright/test'
 import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -67,9 +67,10 @@ try {
   }
   execFileSync(app.process().spawnfile, launchArgs, { env, timeout: 10000, stdio: 'ignore' })
   if (nativeGlassEnabled) {
-    const glass = await inspectGlass()
-    assert.equal(glass.visible, true, 'Showing GLUI restores the material')
-    assert.equal(glass.orderedBehindParent, true, 'Restored glass stays behind the controls')
+    // The second process exits before macOS finishes restoring window order.
+    await expect.poll(inspectGlass, { timeout: 10000 }).toMatchObject({
+      visible: true, orderedBehindParent: true,
+    })
   }
   console.log('PASS: a second launch reuses the existing profile owner')
 
