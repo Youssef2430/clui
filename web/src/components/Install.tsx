@@ -49,12 +49,16 @@ export default function Install() {
           <Icon name="arrow-down" size={16} />
         </a>
         <a className="intel-download" href="/download?arch=x64">
-          Have an Intel Mac?{" "}
+          Intel support is deprecated.{" "}
           <span>
-            Download for Intel <Icon name="arrow-right" size={13} />
+            Get legacy Clui v0.1.17 <Icon name="arrow-right" size={13} />
           </span>
         </a>
         <span className="install-note">macOS 13+ · Free & open source</span>
+        <p className="install-note">
+          Upgrading from Clui on Apple Silicon? Quit Clui and install GLUI from
+          the DMG once. Your preferences are preserved; future updates are automatic.
+        </p>
       </div>
       <div className="source-install">
         <div className="source-header">
