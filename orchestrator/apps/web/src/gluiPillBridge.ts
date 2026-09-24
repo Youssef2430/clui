@@ -1,6 +1,8 @@
 import { CommandId, ThreadId, ProjectId, MessageId, RunId, RuntimeRequestId, OrchestrationV2Command, ProviderApprovalDecision, DEFAULT_MODEL_BY_PROVIDER, type EnvironmentId, type OrchestrationV2ThreadProjection, type ServerProvider } from "@t3tools/contracts";
 import type { PillAction, PillRequest, PillReply, PillThread, PillMessage, PillContextAgent } from "@t3tools/shared/gluiPill";
 import { projectPillContext } from "./gluiPillContext";
+import { projectPillTool } from "./gluiPillTools";
+import { readWebSources } from "@t3tools/shared/webSearchSources";
 import { runAtomCommand, type AtomCommand } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentThreadState } from "@t3tools/client-runtime/state/threads";
 import * as Cause from "effect/Cause";
@@ -43,11 +45,18 @@ export function projectPillThread(projection: OrchestrationV2ThreadProjection, w
   const messages: PillMessage[] = [];
   const permissions: PillThread["permissions"] = [];
   const questions: PillThread["questions"] = [];
+  const sourcesByRun = new Map<string, NonNullable<PillMessage["sources"]>>();
+  for (const { item, sourceThreadId } of projection.visibleTurnItems) {
+    if (item.type !== "web_search" || !item.runId) continue;
+    const key = `${sourceThreadId}:${item.runId}`;
+    sourcesByRun.set(key, [...(sourcesByRun.get(key) ?? []), ...readWebSources(item.results)]);
+  }
   for (const { item, sourceThreadId } of projection.visibleTurnItems) {
     const base = { id: `${sourceThreadId}:${item.id}`, timestamp: DateTime.toEpochMillis(item.startedAt ?? item.updatedAt) };
     if (item.type === "user_message" || item.type === "assistant_message") {
       if (item.type === "user_message" && queued.has(item.messageId)) continue;
       messages.push({ ...base, id: item.messageId, role: item.type === "user_message" ? "user" : "assistant", content: item.text,
+        ...(item.type === "assistant_message" && item.runId ? { sources: sourcesByRun.get(`${sourceThreadId}:${item.runId}`) ?? [] } : {}),
         ...(item.type === "user_message" && item.attachments.length ? { attachments: item.attachments.filter(a => a.type === "image" || a.type === "file").map(a => ({ id: a.id, type: a.type as "image" | "file", name: a.name, mimeType: a.mimeType, size: a.sizeBytes, path: "" })) } : {}),
       });
     } else if (item.type === "approval_request" && pending.has(item.requestId)) {
@@ -63,9 +72,7 @@ export function projectPillThread(projection: OrchestrationV2ThreadProjection, w
     } else if (item.type === "handoff" || item.type === "compaction") {
       messages.push({ ...base, role: "system", content: item.summary ?? "", contextChange: projectPillContext(item, contextAgentFor) });
     } else if (["command_execution", "dynamic_tool", "file_change", "file_search", "web_search", "subagent"].includes(item.type)) {
-      const input = "input" in item ? item.input : "fileName" in item ? item.fileName : "prompt" in item ? item.prompt : "";
-      const output = "output" in item ? item.output : "result" in item ? item.result : "diffStr" in item ? item.diffStr : "results" in item ? item.results : "";
-      messages.push({ ...base, role: "tool", content: item.title ?? item.type.replaceAll("_", " "), toolId: item.id, toolName: ("toolName" in item ? item.toolName : null) ?? item.title ?? item.type, toolInput: typeof input === "string" ? input : JSON.stringify(input), toolResult: typeof output === "string" ? output : JSON.stringify(output), toolStatus: item.status === "failed" ? "error" : ["pending", "running"].includes(item.status) ? "running" : "completed" });
+      messages.push({ ...base, role: "tool", content: item.title ?? item.type.replaceAll("_", " "), ...projectPillTool(item) });
     }
   }
   const native = projection.providerThreads.find(t => t.id === projection.thread.activeProviderThreadId)?.nativeThreadRef?.nativeId ?? null;

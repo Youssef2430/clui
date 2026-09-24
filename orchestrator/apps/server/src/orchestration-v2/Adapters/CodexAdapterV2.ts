@@ -1,3 +1,4 @@
+import { readWebSources } from "@t3tools/shared/webSearchSources";
 import { historyResponseItems } from "../ContextHandoffBudget.ts";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import {
@@ -1073,6 +1074,7 @@ type CodexWebSearchItem = {
   readonly id: string;
   readonly type: "webSearch";
   readonly query?: string | null;
+  readonly results?: ReadonlyArray<unknown> | null;
   readonly action?:
     | CodexSchema.V2ItemStartedNotification__WebSearchAction
     | CodexSchema.V2ItemCompletedNotification__WebSearchAction
@@ -3050,6 +3052,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             });
             const ordinal = yield* resolveItemOrdinal(input.context, input.item.id);
             const patterns = webSearchPatterns(input.item);
+            const results = readWebSources(input.item.results);
             const status = input.completed ? "completed" : "running";
             const node: OrchestrationV2ExecutionNode = {
               id: nodeId,
@@ -3085,6 +3088,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               updatedAt,
               type: "web_search",
               ...(patterns.length === 0 ? {} : { patterns: [...patterns] }),
+              ...(results.length === 0 ? {} : { results }),
             };
             return { node, turnItem };
           });

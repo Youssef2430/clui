@@ -496,3 +496,19 @@ button:focus-visible { outline: 2px solid var(--glui-accent); outline-offset: 2p
   .run-wave > span:nth-child(odd) { transform: scaleY(.5); }
   .run-wave.is-stopping > span { transform: scaleY(.25); }
 }
+.tool-empty { display: block; margin-top: 3px; font-size: 10px; line-height: 1.5; }
+.tool-detail-toggle { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 10px; cursor: pointer; }
+.tool-detail-toggle > span { opacity: .8; }
+.tool-detail-toggle:focus-visible, .web-citation-chip:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+.tool-detail-body { margin-top: 5px; padding: 8px 10px; border: 1px solid; border-radius: 8px; max-height: 240px; overflow: auto; font-size: 11px; }
+.tool-detail-body pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 10px; line-height: 1.6; margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.tool-detail-body > * + * { margin-top: 8px; }
+.web-source-list, .web-source { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.web-source-list { gap: 10px; }
+.web-source { overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; }
+.web-source > a { display: inline-flex; align-items: baseline; gap: 5px; width: fit-content; text-decoration: none; }
+.web-source > a:hover { text-decoration: underline; }
+.web-source > a > svg { flex-shrink: 0; align-self: center; }
+.web-source-domain { font-size: 9px; }
+.web-citation-chip { display: inline-flex; align-items: center; gap: 4px; margin: 0 3px; padding: 1px 6px; border: 1px solid; border-radius: 6px; font-size: 10px; line-height: 1.6; vertical-align: baseline; cursor: pointer; }
+.web-citation-details { display: block; margin: 7px 0; padding: 8px 10px; border-left: 1px solid; font-size: 11px; line-height: 1.5; }

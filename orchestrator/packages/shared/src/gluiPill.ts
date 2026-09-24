@@ -36,7 +36,16 @@ export interface PillMessage {
   toolInput?: string;
   toolResult?: string;
   toolStatus?: "running" | "completed" | "error";
+  toolKind?: "command_execution" | "dynamic_tool" | "file_change" | "file_search" | "web_search" | "subagent";
+  toolState?: string;
+  sources?: PillWebSource[];
   contextChange?: PillContextChange;
+}
+export interface PillWebSource {
+  url: string;
+  title?: string;
+  snippet?: string;
+  citationId?: string;
 }
 export interface PillThread {
   threadId: string;

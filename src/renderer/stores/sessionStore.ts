@@ -1,3 +1,4 @@
+import { copyWithWebCitations } from '../lib/webCitations'
 import type { PillThread } from "../../../orchestrator/packages/shared/src/gluiPill"
 import { PROVIDERS, isProviderId, type ProviderId, type ProviderInfo } from '../../shared/providers'
 import { create } from 'zustand'
@@ -348,7 +349,7 @@ export const useSessionStore = create<State>((set, get) => ({
     const messages = snapshot.messages.map(message => {
       const old = oldMessages.get(message.id)
       const next = { ...message, attachments: message.attachments ?? old?.attachments }
-      return old && Object.keys(next).every(key => key === 'attachments' || key === 'contextChange'
+      return old && Object.keys(next).every(key => key === 'attachments' || key === 'contextChange' || key === 'sources'
         ? JSON.stringify(old[key]) === JSON.stringify(next[key])
         : old[key as keyof Message] === next[key as keyof Message]) ? old : next
     })
@@ -691,7 +692,7 @@ export const useSessionStore = create<State>((set, get) => ({
     for (let i = tab.messages.length - 1; i >= 0; i--) {
       const msg = tab.messages[i]
       if (msg.role === 'assistant' && !msg.toolName) {
-        navigator.clipboard.writeText(msg.content).catch(() => {})
+        navigator.clipboard.writeText(copyWithWebCitations(msg.content, msg.sources)).catch(() => {})
         // Show "Copied" feedback on the message's CopyButton
         set({ copiedMessageId: msg.id })
         setTimeout(() => {

@@ -1,4 +1,4 @@
-import type { PillContextChange, PillModelOptions, PillRuntimeMode } from "../../orchestrator/packages/shared/src/gluiPill"
+import type { PillContextChange, PillMessage, PillModelOptions, PillRuntimeMode } from "../../orchestrator/packages/shared/src/gluiPill"
 import type { ProviderId } from './providers'
 // ─── Claude Code Stream Event Types (verified from v2.1.63) ───
 
@@ -267,6 +267,9 @@ export interface Message {
   /** Attachments sent with this user message (images / files) */
   attachments?: Attachment[]
   contextChange?: PillContextChange
+  toolKind?: PillMessage['toolKind']
+  toolState?: string
+  sources?: PillMessage['sources']
 }
 
 export interface RunResult {

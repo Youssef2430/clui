@@ -22,6 +22,12 @@ try {
   await expect(page.getByRole('tab')).toHaveCount(2)
   const health = await page.evaluate(() => window.glui.tabHealth())
   const tabId = health.tabs.at(-1).tabId
+  // Keep health reconciliation consistent with the synthetic snapshot stream.
+  await app.evaluate(({ ipcMain }, tabId) => {
+    globalThis.fixtureHealth = { tabId, status: 'running', alive: true }
+    ipcMain.removeHandler('glui:tab-health')
+    ipcMain.handle('glui:tab-health', () => ({ tabs: [globalThis.fixtureHealth], queueDepth: 0 }))
+  }, tabId)
   await page.getByRole('tab', { selected: true }).click()
   assert.equal(await page.evaluate(() => 'openWorkspace' in window.glui), false)
   await expect(page.getByRole('button', { name: 'Open workspace', exact: true })).toHaveCount(0)
@@ -43,6 +49,7 @@ try {
     ],
   }
   const emit = () => app.evaluate(({ BrowserWindow }, { tabId, snapshot }) => {
+    globalThis.fixtureHealth = { tabId, status: snapshot.status, alive: snapshot.status === 'running' || snapshot.status === 'connecting' }
     BrowserWindow.getAllWindows()[0].webContents.send('glui:thread-snapshot', tabId, snapshot)
   }, { tabId, snapshot })
   await emit()
@@ -88,6 +95,55 @@ try {
   snapshot.activeRequestId = 'run-2'
   await emit()
   await expect(page.getByRole('button', { name: 'Interrupt current task', exact: true })).toBeEnabled()
+  // Exercise source links and the exact metadata-free web lookup reported by the user.
+  snapshot.status = 'completed'
+  snapshot.activeRequestId = null
+  snapshot.messages = [
+    { id: 'user-tools', role: 'user', content: 'Check the weather and run the command.', timestamp: 1 },
+    { id: 'search-empty', role: 'tool', content: '', timestamp: 2, toolKind: 'web_search', toolName: 'WebSearch', toolInput: '{}', toolStatus: 'completed', toolState: 'completed' },
+    { id: 'search-source', role: 'tool', content: '', timestamp: 3, toolKind: 'web_search', toolName: 'WebSearch', toolInput: '{"query":"Toronto weather"}', toolStatus: 'completed', toolState: 'completed', sources: [{ title: 'Toronto forecast', url: 'https://example.com/weather', citationId: 'turn0search0' }] },
+    { id: 'command', role: 'tool', content: '', timestamp: 4, toolKind: 'command_execution', toolName: 'Bash', toolInput: '{"command":"printf hello"}', toolResult: 'hello\n**literal output**', toolStatus: 'completed', toolState: 'completed' },
+    { id: 'answer-tools', role: 'assistant', content: 'Forecast checked.citeturn0search0 Missing weather source.citeturn0forecast0', timestamp: 5, sources: [] },
+  ]
+  await app.evaluate(({ ipcMain }) => {
+    globalThis.openedSource = null
+    globalThis.legacyResultReads = 0
+    ipcMain.removeHandler('glui:open-external')
+    ipcMain.handle('glui:open-external', (_event, url) => { globalThis.openedSource = url; return true })
+    ipcMain.removeHandler('glui:get-tool-results')
+    ipcMain.handle('glui:get-tool-results', () => { globalThis.legacyResultReads++; return {} })
+  })
+  await emit()
+  await page.getByText('Web search and 2 more tools', { exact: true }).click()
+  await expect(page.getByText('Completed · The agent did not share search results or source links.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Search: Toronto weather', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '1 source · Completed', exact: true }).click()
+  await page.getByRole('link', { name: 'Toronto forecast', exact: true }).click()
+  assert.equal(await app.evaluate(() => globalThis.openedSource), 'https://example.com/weather')
+  await page.getByRole('button', { name: 'Output · Completed', exact: true }).click()
+  await expect(page.getByLabel('Tool output', { exact: true })).toHaveText('hello\n**literal output**')
+  assert.equal(await app.evaluate(() => globalThis.legacyResultReads), 0)
+  await expect(page.getByRole('button', { name: 'View citation sources', exact: true })).toHaveCount(2)
+  await expect(page.getByText('Source unavailable', { exact: true })).toHaveCount(2)
+  // Same message and text, but fresh metadata: memoization must not hide resolved links.
+  snapshot.messages.at(-1).sources = snapshot.messages[2].sources
+  await emit()
+  await expect(page.getByText('Source unavailable', { exact: true })).toHaveCount(1)
+  await page.getByRole('button', { name: 'View citation sources', exact: true }).first().click()
+  await expect(page.getByRole('group', { name: 'Citation sources', exact: true }).getByRole('link', { name: 'Toronto forecast', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'View citation sources', exact: true }).last().click()
+  await expect(page.getByText('The agent did not provide a link for this citation.', { exact: true })).toBeVisible()
+  assert.equal(await page.locator('body').innerText().then(text => /[\uE200\uE201\uE202]|No result data available|web_search/.test(text)), false)
+  await page.screenshot({ path: join(profile, 'pill-tools-citations.png') })
+  console.log('PASS: search details, real source-link destination, literal command output, no legacy result lookup, citation metadata updates, honest missing-source fallback')
+  // Return to the activity fixture for reduced-motion and narrow-pill checks.
+  snapshot.status = 'running'
+  snapshot.activeRequestId = 'run-3'
+  snapshot.messages = [
+    { id: 'narrow-user', role: 'user', content: 'Continue.', timestamp: 1 },
+    { id: 'narrow-handoff', role: 'system', content: '', timestamp: 2, contextChange: { kind: 'handoff', state: 'completed', sources: [{ provider: 'claude', label: 'Claude Opus 5' }], target: { provider: 'codex', label: 'GPT-6-Luna' } } },
+  ]
+  await emit()
   await page.emulateMedia({ reducedMotion: 'reduce' })
   assert.equal(await wave.evaluate(el => getComputedStyle(el).animationName), 'none')
   await app.evaluate(({ BrowserWindow }) => {

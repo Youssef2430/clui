@@ -208,5 +208,9 @@ export function buildCodexDeveloperInstructions(
       : codexDefaultModeDeveloperInstructions(browserToolsAvailable);
   return `${base}
 
+## Source citations in GLUI
+
+When citing web research, use ordinary Markdown links with the actual source URLs supplied by the tool. GLUI cannot resolve provider-internal reference markers such as turn0search0 or turn0forecast0 unless source metadata accompanies them. Do not output raw citation markers or invent a URL from a reference ID. If a tool supplies data without a link, say that a source link was not provided.
+
 ${buildRuntimeInstructions({ harness: "Codex", ...runtime })}`;
 }

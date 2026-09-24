@@ -371,6 +371,10 @@
       "types": "./src/gitPatchPath.ts",
       "import": "./src/gitPatchPath.ts"
     },
+    "./webSearchSources": {
+      "types": "./src/webSearchSources.ts",
+      "import": "./src/webSearchSources.ts"
+    },
     "./gluiPill": {
       "types": "./src/gluiPill.ts",
       "import": "./src/gluiPill.ts"

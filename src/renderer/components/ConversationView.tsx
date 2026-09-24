@@ -18,6 +18,9 @@ import {
 import { useSessionStore } from '../stores/sessionStore'
 import { ContextDivider } from './ContextDivider'
 import { RunActivity } from './RunActivity'
+import { ToolDetails } from './ToolDetails'
+import { WebCitation } from './WebSources'
+import { citationRefs, copyWithWebCitations, remarkWebCitations } from '../lib/webCitations'
 import { PermissionCard } from './PermissionCard'
 import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { getFileIcon } from './FileMentionMenu'
@@ -31,6 +34,7 @@ const PAGE_SIZE = 100
 const REMARK_PLUGINS = [remarkGfm, [remarkMath, { singleDollarTextMath: false }]] as any // Hoisted — prevents re-parse on every render
 const REMARK_PLUGINS_USER = [remarkGfm, [remarkMath, { singleDollarTextMath: false }], remarkBreaks] as any // User messages: also convert single newlines to <br>
 const REHYPE_PLUGINS = [rehypeKatex]
+const ASSISTANT_REMARK_PLUGINS = [...REMARK_PLUGINS, remarkWebCitations]
 
 // Minimal link override for Markdown surfaces without full markdownComponents:
 // prevents default <a> navigation (which would leave the Electron window)
@@ -760,7 +764,7 @@ function ImageCard({ src, alt, colors }: { src?: string; alt?: string; colors: R
   )
 }
 
-// ─── Assistant Message (memoized — only re-renders when content changes) ───
+// ─── Assistant Message (memoized, including source metadata updates) ───
 
 const AssistantMessage = React.memo(function AssistantMessage({
   message,
@@ -773,7 +777,7 @@ const AssistantMessage = React.memo(function AssistantMessage({
 
   const markdownComponents = useMemo(() => ({
     table: ({ children }: any) => <TableScrollWrapper>{children}</TableScrollWrapper>,
-    a: ({ href, children }: any) => (
+    a: ({ href, children }: any) => citationRefs(href) ? <WebCitation refs={citationRefs(href)!} sources={message.sources} /> : (
       <button
         type="button"
         className="underline decoration-dotted underline-offset-2 cursor-pointer"
@@ -786,12 +790,12 @@ const AssistantMessage = React.memo(function AssistantMessage({
       </button>
     ),
     img: ({ src, alt }: any) => <ImageCard src={src} alt={alt} colors={colors} />,
-  }), [colors])
+  }), [colors, message.sources])
 
   const inner = (
     <div className="group/msg relative">
       <div className="text-[13px] leading-[1.6] prose-cloud min-w-0 max-w-[92%]">
-        <Markdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={markdownComponents}>
+        <Markdown remarkPlugins={ASSISTANT_REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={markdownComponents}>
           {message.content}
         </Markdown>
       </div>
@@ -799,7 +803,7 @@ const AssistantMessage = React.memo(function AssistantMessage({
           Absolute positioning so it never shifts the text layout. */}
       {message.content.trim() && (
         <CopyButtonWrapper messageId={message.id}>
-          <CopyButton text={message.content} messageId={message.id} />
+          <CopyButton text={copyWithWebCitations(message.content, message.sources)} messageId={message.id} />
         </CopyButtonWrapper>
       )}
     </div>
@@ -819,7 +823,7 @@ const AssistantMessage = React.memo(function AssistantMessage({
       {inner}
     </motion.div>
   )
-}, (prev, next) => prev.message.content === next.message.content && prev.skipMotion === next.skipMotion)
+}, (prev, next) => prev.message === next.message && prev.skipMotion === next.skipMotion)
 
 // ─── Tool Group (collapsible timeline — Claude Code style) ───
 
@@ -846,7 +850,7 @@ function getToolDescriptionFromParsed(name: string, parsed: Record<string, unkno
       const cmd = s(parsed.command)
       return cmd.length > 60 ? `${cmd.substring(0, 57)}...` : cmd || 'Bash'
     }
-    case 'WebSearch': return `Search: ${s(parsed.query) || s(parsed.search_query)}`
+    case 'WebSearch': return s(parsed.query) || s(parsed.search_query) ? `Search: ${s(parsed.query) || s(parsed.search_query)}` : 'Web search'
     case 'WebFetch': return `Fetch: ${s(parsed.url)}`
     case 'Agent': return `Agent: ${(s(parsed.prompt) || s(parsed.description)).substring(0, 50)}`
     case 'TodoWrite': {
@@ -855,7 +859,7 @@ function getToolDescriptionFromParsed(name: string, parsed: Record<string, unkno
       return `Update todos (${done}/${items.length} done)`
     }
     case 'TodoRead': return 'Read todos'
-    default: return name
+    default: return name.replace(/^mcp__/, '').replace(/__/g, ' · ').replace(/_/g, ' ')
   }
 }
 
@@ -1116,7 +1120,7 @@ function ToolGroup({ tools, skipMotion }: { tools: Message[]; skipMotion?: boole
                     })()}
 
                     {/* Result accordion (shown both while running for agents, and after completion) */}
-                    {isRunning && toolName === 'Agent' ? (
+                    {tool.toolKind ? <ToolDetails tool={tool} /> : isRunning && toolName === 'Agent' ? (
                       <ToolResultAccordion tool={tool} />
                     ) : isRunning ? (
                       <span className="text-[10px] mt-0.5 block" style={{ color: colors.textMuted }}>

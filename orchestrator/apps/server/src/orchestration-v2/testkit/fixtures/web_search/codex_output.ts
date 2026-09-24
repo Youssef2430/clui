@@ -38,4 +38,8 @@ export function assertWebSearchOutput(
   assert.lengthOf(webSearchItems, 1);
   assert.equal(webSearchItems[0]?.status, "completed");
   assert.include(webSearchItems[0]?.patterns ?? [], WEB_SEARCH_QUERY);
+  assert.deepEqual(webSearchItems[0]?.results, [{
+    title: "Official ticket information", url: "https://www.fifa.com/tickets",
+    citationId: "turn0search0", snippet: "Ticket information from FIFA.",
+  }]);
 }
